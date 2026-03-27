@@ -71,7 +71,7 @@ except Exception:
 # =========================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
 BOT_USERNAME = os.getenv("BOT_USERNAME", "").strip("@")  # optional
-ADMIN_ID = 7988263992  # only admin access
+ADMIN_ID = 8288760326  # only admin access
 PIN_CHAT_ID = None  # set to a group/channel id (bot must be admin) to pin messages there
 # Channels gate (user must join to use bot)
 REQUIRED_CHANNELS = [
