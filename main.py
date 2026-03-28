@@ -6155,11 +6155,16 @@ def main():
     init_db()
     print(f"DB: {DB}")
 
+    # ✅ Telegram Bot init
     app = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
 
-    # Internal API for userbot (Railway private networking)
+    # ✅ Internal API (Userbot connect)
     threading.Thread(target=run_internal_api, daemon=True).start()
     print(f"🔌 Internal API running on port {API_PORT}")
+
+    # =========================
+    # HANDLERS
+    # =========================
 
     # Commands
     app.add_handler(CommandHandler("start", start))
@@ -6167,7 +6172,6 @@ def main():
     app.add_handler(CommandHandler("syncstat", syncstat_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
-    # Admin-only Drive backup commands
     app.add_handler(CommandHandler("backupnow", backupnow_cmd))
     app.add_handler(CommandHandler("backupstat", backupstat_cmd))
     app.add_handler(CommandHandler("formimg", formimg_cmd))
@@ -6176,11 +6180,11 @@ def main():
     # Callbacks
     app.add_handler(CallbackQueryHandler(callbacks))
 
-    # Admin content handlers (broadcast media/text + auto reply config)
+    # Admin content handlers
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, admin_content_handler), group=0)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_content_handler), group=0)
 
-    # UPI input handler
+    # UPI handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, upi_handler), group=1)
 
     # Admin menu handler
@@ -6189,15 +6193,21 @@ def main():
     # User menu handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler), group=3)
 
-    # ✅ Gmail sync is scheduled in _post_init()
-
     # =========================
-# BOT START (FINAL FIX)
+    # START BOT (FINAL FIX)
+    # =========================
+
+    print("✅ Bot started (POLLING MODE)...")
+
+    # ❌ webhook removed
+    # ✅ polling only (no port conflict)
+
+    app.run_polling(drop_pending_updates=True)
+
+
+# =========================
+# ENTRY POINT
 # =========================
 
-print("✅ Bot started (POLLING MODE)...")
-
-# ❌ webhook हटाया
-# ✅ polling use
-
-application.run_polling(drop_pending_updates=True)
+if __name__ == "__main__":
+    main()
