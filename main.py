@@ -6192,36 +6192,12 @@ def main():
     # ✅ Gmail sync is scheduled in _post_init()
 
     # =========================
-    # WEBHOOK (Railway)
-    # =========================
-    print("✅ Bot started (WEBHOOK)...")
+# BOT START (FINAL FIX)
+# =========================
 
-    port = int(os.environ.get("PORT", "8080"))
+print("✅ Bot started (POLLING MODE)...")
 
-    # Railway built-in public domain (preferred). Fallback to manual variable if you set it.
-    public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_STATIC_URL") or "").strip()
-    if not public_domain:
-        # If no public domain is available (e.g., local run), fallback to polling
-        print("⚠️ No Railway public domain found; falling back to polling.")
-        app.run_polling(drop_pending_updates=True)
-        return
+# ❌ webhook हटाया
+# ✅ polling use
 
-    # Your webhook path (must match what you set in setWebhook). Example: hook_92ks8s9d7sd
-    url_path = (os.environ.get("WEBHOOK_PATH") or "").strip().lstrip("/")
-    if not url_path:
-        # default to BOT_TOKEN (works as a secret path) if you didn't set WEBHOOK_PATH
-        url_path = str(BOT_TOKEN).strip().lstrip("/")
-
-    webhook_url = f"https://{public_domain}/{url_path}"
-    print("🌐 Webhook URL:", webhook_url)
-
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=url_path,
-        webhook_url=webhook_url,
-        drop_pending_updates=True,
-    )
-
-if __name__ == "__main__":
-    main()
+app.run_polling(drop_pending_updates=True)
