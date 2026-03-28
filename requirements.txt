@@ -7,3 +7,4 @@ google-auth-httplib2
 reportlab
 requests
 python-dotenv==1.0.1
+flask
