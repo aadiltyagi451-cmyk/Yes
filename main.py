@@ -6200,4 +6200,4 @@ print("✅ Bot started (POLLING MODE)...")
 # ❌ webhook हटाया
 # ✅ polling use
 
-app.run_polling(drop_pending_updates=True)
+application.run_polling(drop_pending_updates=True)
