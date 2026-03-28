@@ -87,7 +87,7 @@ FINGERPRINT_PUBLIC_BASE_URL = ""  # device-verify webapp disabled; keep empty to
 # GMAIL SMTP + IMAP (Deliverability check via real send + bounce)
 # NOTE: This does NOT "probe" SMTP for existence; it sends a tiny test email and checks for bounce.
 # You must use a Gmail account with 2FA + App Password, and enable IMAP in Gmail settings.
-ENABLE_SMTP_BOUNCE_CHECK = True
+ENABLE_SMTP_BOUNCE_CHECK = False
 SMTP_GMAIL_USER = "aadiltyagi459@gmail.com"
 SMTP_GMAIL_APP_PASSWORD = "kawl rdaz jawr nhfp"
 BOUNCE_POLL_SECONDS = 4  # max wait time (fast mode)
@@ -135,7 +135,7 @@ AUTOMATION_USER_ACTIVE = {}     # user_id -> last task text
 API_TASK_QUEUE = []             # list of {type: fetch/done, user: int}
 APP_INSTANCE = None            # python-telegram-bot Application
 APP_LOOP = None                # running asyncio loop for PTB app
-API_PORT = int(os.environ.get("API_PORT") or os.environ.get("PORT") or "5000")
+API_PORT = int(os.environ.get("API_PORT") or os.environ.get("PORT") or "8080")
 api_flask = Flask(__name__)
 
 def automation_task_menu() -> ReplyKeyboardMarkup:
