@@ -3797,6 +3797,10 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu_markup(user.id)
         )
         return
+    # =========================
+    # AUTOMATION BUTTONS
+    # =========================
+
     if data == "AUTO_DONE":
         now = int(time.time())
         task_ts = int(AUTOMATION_USER_TASK_TIME.get(int(user.id), 0) or 0)
@@ -3812,6 +3816,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         AUTOMATION_DONE_QUEUE.append(int(user.id))
+
         try:
             await automation_send_signal(context, "DONE", int(user.id))
         except Exception:
@@ -3820,17 +3825,29 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("⏳ Checking...")
         return
 
+
     if data == "VID_CREATE":
-    await query.message.reply_document(document=VIDEO_FILE_ID_CREATE)
-    return
+        if VIDEO_FILE_ID_CREATE:
+            await query.message.reply_document(document=VIDEO_FILE_ID_CREATE)
+        else:
+            await query.message.reply_text("❌ Create video not set")
+        return
+
 
     if data == "VID_LOGOUT":
-    await query.message.reply_document(document=VIDEO_FILE_ID_LOGOUT)
-    return
+        if VIDEO_FILE_ID_LOGOUT:
+            await query.message.reply_document(document=VIDEO_FILE_ID_LOGOUT)
+        else:
+            await query.message.reply_text("❌ Logout video not set")
+        return
+
 
     if data == "VID_RECOVERY":
-    await query.message.reply_document(document=VIDEO_FILE_ID_RECOVERY)
-    return
+        if VIDEO_FILE_ID_RECOVERY:
+            await query.message.reply_document(document=VIDEO_FILE_ID_RECOVERY)
+        else:
+            await query.message.reply_text("❌ Recovery video not set")
+        return
     # Admin selects a payout to process
     
     # Export form_table PDF options (admin)
