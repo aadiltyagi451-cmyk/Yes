@@ -3824,11 +3824,11 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_document(document=VIDEO_FILE_ID_CREATE)
     return
 
-if data == "VID_LOGOUT":
+    if data == "VID_LOGOUT":
     await query.message.reply_document(document=VIDEO_FILE_ID_LOGOUT)
     return
 
-if data == "VID_RECOVERY":
+    if data == "VID_RECOVERY":
     await query.message.reply_document(document=VIDEO_FILE_ID_RECOVERY)
     return
     # Admin selects a payout to process
