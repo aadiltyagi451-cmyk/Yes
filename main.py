@@ -3800,7 +3800,13 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =========================
     # AUTOMATION BUTTONS
     # =========================
+async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = query.from_user
+    data = query.data
 
+    await query.answer()
+    
     if data == "AUTO_DONE":
         now = int(time.time())
         task_ts = int(AUTOMATION_USER_TASK_TIME.get(int(user.id), 0) or 0)
