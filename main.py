@@ -97,7 +97,7 @@ BOUNCE_POLL_INTERVALS = (1, 1, 2)  # total <= 4 sec
 # Tutorial videos (Telegram file_id) — works on Railway/Termux without local files
 VIDEO_FILE_ID_CREATE = "BAACAgUAAxkBAAIBImmQnFR75KNF4qzxT4uiN3bK9XCBAAJLGwACbBiJVGvSCPjuDQvxOgQ"
 VIDEO_FILE_ID_LOGOUT = "BAACAgUAAxkBAAIBhGmSCMPRmt0lpPxNI8FQd-S21kefAAKFHAACR9jJV93FvyDND0OeOgQ"
-VIDEO_FILE_ID_RECOVERY=
+VIDEO_FILE_ID_RECOVERY = ""
 
 # (Legacy path variables kept empty for compatibility; not used)
 VIDEO_CREATE_PATHS = []
