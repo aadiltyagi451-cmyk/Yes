@@ -146,9 +146,9 @@ api_flask = Flask(__name__)
 def automation_task_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✔ Done", callback_data="AUTO_DONE")],
-        [InlineKeyboardButton("📘 How to add Recovery email", callback_data="VID_RECOVERY")
-InlineKeyboardButton("📗 How to create gmail account", callback_data="VID_CREATE")
-InlineKeyboardButton("🔐 How to logout of gmail account", callback_data="VID_LOGOUT")],
+        [InlineKeyboardButton("📘 How to add Recovery email", callback_data="VID_RECOVERY")],
+        [InlineKeyboardButton("📗 How to create gmail account", callback_data="VID_CREATE")],
+        [InlineKeyboardButton("🔐 How to logout of gmail account", callback_data="VID_LOGOUT")],
     ])
 
 def automation_convert_price(text: str) -> str:
