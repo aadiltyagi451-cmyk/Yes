@@ -3310,10 +3310,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     # 🔥 STEP 1: USERBOT KO TASK FETCH KARNE BOLO
-    requests.post(f"{API_URL}/task", json={
-        "type": "fetch",
-        "user": user.id
-    })
+    await asyncio.to_thread(requests.post, f"{API_URL}/task", json={
+    "type": "fetch",
+    "user": user.id
+})
+
 
     await update.message.reply_text("⏳ Fetching task... Please wait")
 
