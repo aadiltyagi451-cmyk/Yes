@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import re
 import time
-import requests
 import sqlite3
 import threading
 import os
@@ -14,6 +13,7 @@ from datetime import datetime, timedelta
 import random
 import string
 import asyncio
+import requests
 import math
 import smtplib
 import imaplib
