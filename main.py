@@ -81,7 +81,7 @@ REQUIRED_CHANNELS = [
 ]
 
 FINGERPRINT_PUBLIC_BASE_URL = ""  # device-verify webapp disabled; keep empty to avoid NameError
-
+API_URL = "https://worker-production-70084.up.railway.app"
 # =========================
 # GMAIL SMTP + IMAP (Deliverability check via real send + bounce)
 # NOTE: This does NOT "probe" SMTP for existence; it sends a tiny test email and checks for bounce.
