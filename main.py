@@ -3335,17 +3335,29 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🔥 STEP 3: TEXT PARSE
     import re
 
-    email_match = re.search(r'[\w\.-]+@gmail\.com', task_text)
-    password_match = re.search(r'Password[:\s]*([^\n]+)', task_text)
-    all_emails = re.findall(r'[\w\.-]+@gmail\.com', task_text)
+    email_match = re.search(r'Email:\s*([^\n]+)', task_text)
+    password_match = re.search(r'Password:\s*([^\n]+)', task_text)
+    first_match = re.search(r'First name:\s*([^\n]+)', task_text)
+    last_match = re.search(r'Last name:\s*([^\n]+)', task_text)
+    recovery_match = re.search(r'Recovery email\s*([^\s\n]+@gmail\.com)', task_text)
 
-    email = email_match.group(0) if email_match else "example@gmail.com"
-    password = password_match.group(1).strip() if password_match else "Pass@1234"
-    recovery_email = all_emails[1] if len(all_emails) > 1 else "recovery@gmail.com"
+    email = email_match.group(1).strip() if email_match else None
+    password = password_match.group(1).strip() if password_match else None
+    first_name = first_match.group(1).strip() if first_match else "John"
+    last_name = last_match.group(1).strip() if last_match else "Doe"
+    recovery_email = recovery_match.group(1).strip() if recovery_match else None
 
-    first_name = "John"
-    last_name = "Doe"
-    name = f"{first_name} {last_name}"
+    if last_name == "✖️":
+        last_name = ""
+
+    if not email or not password:
+        await update.message.reply_text("❌ Failed to fetch valid task, try again.")
+        return
+
+    if not recovery_email:
+        recovery_email = "NO_RECOVERY"
+
+    name = f"{first_name} {last_name}".strip()
     extra_data = "N/A"
 
     # 🔥 TEMP STORE (IMPORTANT)
@@ -3358,6 +3370,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "task_id": task_id,
         "msg_id": msg_id
     }
+
 
     # 🔥 STEP 4: DB SAVE
     now = int(time.time())
