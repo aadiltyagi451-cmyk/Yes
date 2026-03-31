@@ -3313,24 +3313,47 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🔥 STEP 1: USERBOT KO TASK FETCH KARNE BOLO
     await asyncio.to_thread(requests.post, f"{API_URL}/task", json={
-    "type": "fetch",
-    "user": user.id
-})
-
+        "type": "fetch",
+        "user": user.id
+    })
 
     await update.message.reply_text("⏳ Fetching task... Please wait")
-    
-    # 🔥 STEP 2: API se data lo
-    try:
-        r = requests.get(f"{API_URL}/get-user-task?user_id={user.id}", timeout=10)
-        api_data = r.json() if r.status_code == 200 else {}
-    except Exception as e:
-        print("API ERROR:", e)
-        api_data = {}
+
+    # 🔥 STEP 2: WAIT FOR WORKER (IMPORTANT FIX)
+    api_data = {}
+
+    for _ in range(15):  # max 15 sec wait
+        try:
+            r = requests.get(f"{API_URL}/get-user-task?user_id={user.id}", timeout=10)
+            data = r.json() if r.status_code == 200 else {}
+
+            task_text = data.get("task", "")
+
+            if task_text and "Email:" in task_text and "Password:" in task_text:
+                api_data = data
+                break
+
+        except Exception as e:
+            print("API ERROR:", e)
+
+        await asyncio.sleep(1)
+
+    if not api_data:
+        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")
+        return
 
     task_text = api_data.get("task", "")
     task_id = api_data.get("task_id")
     msg_id = api_data.get("msg_id")
+
+    # 🔥 DUPLICATE TASK CHECK
+    last_task = context.user_data.get("last_task_id")
+
+    if task_id == last_task:
+        await update.message.reply_text("⚠️ Same task aa gaya, retry kar rahe hain...")
+        return await register(update, context)
+
+    context.user_data["last_task_id"] = task_id
 
     # 🔥 STEP 3: TEXT PARSE
     import re
@@ -3350,9 +3373,10 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if last_name == "✖️":
         last_name = ""
 
+    # ❌ Invalid data → retry
     if not email or not password:
-        await update.message.reply_text("❌ Failed to fetch valid task, try again.")
-        return
+        await update.message.reply_text("❌ Invalid task data, retrying...")
+        return await register(update, context)
 
     if not recovery_email:
         recovery_email = "NO_RECOVERY"
@@ -3360,7 +3384,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = f"{first_name} {last_name}".strip()
     extra_data = "N/A"
 
-    # 🔥 TEMP STORE (IMPORTANT)
+    # 🔥 TEMP STORE
     temp_data[user.id] = {
         "name": name,
         "email": email,
@@ -3371,14 +3395,13 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "msg_id": msg_id
     }
 
-
-    # 🔥 STEP 4: DB SAVE
+    # 🔥 STEP 4: DB SAVE (DUPLICATE SAFE)
     now = int(time.time())
     con = db()
     cur = con.cursor()
 
     cur.execute("""
-    INSERT INTO registrations(
+    INSERT OR IGNORE INTO registrations(
         user_id, first_name, last_name, email, password, recovery_email, extra_data, msg_id, created_at, state
     ) VALUES(?,?,?,?,?,?,?,?,?,?)
     """, (
@@ -3389,13 +3412,21 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         password,
         recovery_email,
         extra_data,
-        msg_id,   # 🔥 IMPORTANT
+        msg_id,
         now,
         "created",
     ))
+
+    # 🔥 Duplicate → retry
+    if cur.rowcount == 0:
+        await update.message.reply_text("⚠️ Duplicate task मिला, नया ला रहे हैं...")
+        con.close()
+        return await register(update, context)
+
     reg_id = cur.lastrowid
 
     expires_at = now + ACTION_TIMEOUT_HOURS * 3600
+
     cur.execute("""
     INSERT INTO actions(
         user_id, reg_id, created_at, expires_at, state
@@ -3407,6 +3438,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expires_at,
         "shown",
     ))
+
     action_id = cur.lastrowid
 
     con.commit()
@@ -3434,7 +3466,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         msg_text,
         parse_mode="Markdown",
-        reply_markup=reg_buttons(action_id, task_id)  # 🔥 task_id pass karo
+        reply_markup=reg_buttons(action_id, task_id)
     )
 # =========================
 # CALLBACKS
