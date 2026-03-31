@@ -3317,10 +3317,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     await update.message.reply_text("⏳ Fetching task... Please wait")
-
-    import asyncio
-    await asyncio.sleep(3)
-
+    
     # 🔥 STEP 2: API se data lo
     try:
         r = requests.get(f"{API_URL}/get-user-task?user_id={user.id}", timeout=10)
