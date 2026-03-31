@@ -349,8 +349,8 @@ def init_db():
         password TEXT,
         recovery_email TEXT,
         extra_data TEXT,
-        created_at INTEGER,
         msg_id INTEGER,
+        created_at INTEGER
     )
     """)
 
