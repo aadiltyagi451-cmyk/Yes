@@ -4027,8 +4027,6 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Gender : Your choice,\n"
             )
 
-            # Append Recovery email note (email monospace for easy copy)
-            recovery_email = "gabopuwa355@gmail.com"
             base_text += (
             "\n________________________\n"
             "🚦 You need to add Recovery email\n"
@@ -4234,8 +4232,6 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-            # Append Recovery email note
-            recovery_email = "gabopuwa355@gmail.com"
             base_text = tr(
                 user.id,
                 "register_template",
