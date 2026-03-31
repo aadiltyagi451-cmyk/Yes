@@ -243,6 +243,7 @@ def init_db():
         recovery_email TEXT,
         extra_data TEXT,
         created_at INTEGER,
+        msg_id INTEGER,
         state TEXT DEFAULT 'created'   -- created, confirmed_by_user, approved, rejected, canceled, timeout
     )
     """)
@@ -268,7 +269,8 @@ def init_db():
         pass
     for col in [
         "ALTER TABLE registrations ADD COLUMN recovery_email TEXT",
-        "ALTER TABLE registrations ADD COLUMN extra_data TEXT"
+        "ALTER TABLE registrations ADD COLUMN extra_data TEXT",
+        "ALTER TABLE form_table ADD COLUMN msg_id"
     ]:
         try:
             cur.execute(col)
@@ -347,13 +349,15 @@ def init_db():
         password TEXT,
         recovery_email TEXT,
         extra_data TEXT,
-        created_at INTEGER
+        created_at INTEGER,
+        msg_id INTEGER,
     )
     """)
 
     for col in [
         "ALTER TABLE form_table ADD COLUMN recovery_email TEXT",
-        "ALTER TABLE form_table ADD COLUMN extra_data TEXT"
+        "ALTER TABLE form_table ADD COLUMN extra_data TEXT",
+        "ALTER TABLE form_table ADD COLUMN msg_id"
     ]:
         try:
             cur.execute(col)
