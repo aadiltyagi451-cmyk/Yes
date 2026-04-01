@@ -4108,36 +4108,35 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🔥 BELOW SAME (UNCHANGED LOGIC)
     # =========================================================
 
-
         if data.startswith("REG_CONFIRM:"):
 
-            # Load registration
-            con = db()
-            cur = con.cursor()
-            cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
-            r = cur.fetchone()
-            con.close()
+    # Load registration
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
+    r = cur.fetchone()
+    con.close()
 
-            email = (r["email"] or "").strip()
-            target_msg_id = q.message.message_id
-            chat_id = q.message.chat_id
+    email = (r["email"] or "").strip()
+    target_msg_id = q.message.message_id
+    chat_id = q.message.chat_id
 
-            # Send checking message
-            confirm_msg_id = None
-            try:
-            sent = await context.bot.send_message(
+    # Send checking message
+    confirm_msg_id = None
+    try:
+        sent = await context.bot.send_message(
             chat_id=chat_id,
             text="⏳ Checking...",
             reply_to_message_id=target_msg_id,
         )
-            confirm_msg_id = sent.message_id
-            except:
-                pass
+        confirm_msg_id = sent.message_id
+    except:
+        pass
 
-            try:
-                await q.answer()
-            except:
-                pass
+    try:
+        await q.answer()
+    except:
+        pass
 
     # 🔥 COOLDOWN
     now = int(time.time())
@@ -4165,7 +4164,6 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
             return
-
         else:
             context.user_data[ready_key] = True
 
@@ -4177,6 +4175,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "type": "confirm",
         "user": user.id
     })
+        
 
     # =========================================================
     # 🔥 RESULT DB READ
