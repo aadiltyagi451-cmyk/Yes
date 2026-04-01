@@ -3308,142 +3308,150 @@ def strong_password(length=None):
 # =========================
 # REGISTER (THIS MUST BE ASYNC)
 # =========================
-async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):  
+    user = update.effective_user  
 
-    # 🔥 STEP 1: USERBOT KO TASK FETCH KARNE BOLO
-    await asyncio.to_thread(requests.post, f"{API_URL}/task", json={
+    # 🔥 STEP 1: USERBOT KO TASK FETCH KARNE BOLO  
+    await userbot.handle_job({
         "type": "fetch",
         "user": user.id
     })
 
-    await update.message.reply_text("⏳ Fetching task... Please wait")
+    await update.message.reply_text("⏳ Fetching task... Please wait")  
 
-    # 🔥 STEP 2: WAIT FOR WORKER (IMPORTANT FIX)
-    api_data = {}
+    # 🔥 STEP 2: DB SE TASK LO (API REMOVE)  
+    import sqlite3
 
-    for _ in range(15):  # max 15 sec wait
-        try:
-            r = requests.get(f"{API_URL}/get-user-task?user_id={user.id}", timeout=10)
-            data = r.json() if r.status_code == 200 else {}
+    def get_task(user_id):
+        con = sqlite3.connect("userbot.db")
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
 
-            task_text = data.get("task", "")
+        cur.execute("""
+        SELECT * FROM tasks
+        WHERE user_id=?
+        ORDER BY id DESC LIMIT 1
+        """, (user_id,))
 
-            if task_text and "Email:" in task_text and "Password:" in task_text:
-                api_data = data
-                break
+        row = cur.fetchone()
+        con.close()
 
-        except Exception as e:
-            print("API ERROR:", e)
+        return dict(row) if row else None
+
+    task_data = None
+
+    for _ in range(15):  
+        task_data = get_task(user.id)
+
+        if task_data and task_data.get("task_text"):
+            break
 
         await asyncio.sleep(1)
 
-    if not api_data:
-        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")
-        return
+    if not task_data:  
+        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")  
+        return  
 
-    task_text = api_data.get("task", "")
-    task_id = api_data.get("task_id")
-    msg_id = api_data.get("msg_id")
+    task_text = task_data.get("task_text", "")  
+    task_id = task_data.get("task_id")  
+    msg_id = task_data.get("msg_id")  
 
-    # 🔥 DUPLICATE TASK CHECK
-    last_task = context.user_data.get("last_task_id")
+    # 🔥 DUPLICATE TASK CHECK  
+    last_task = context.user_data.get("last_task_id")  
 
-    if task_id == last_task:
-        await update.message.reply_text("⚠️ Same task aa gaya, retry kar rahe hain...")
-        return await register(update, context)
+    if task_id == last_task:  
+        await update.message.reply_text("⚠️ Same task aa gaya, retry kar rahe hain...")  
+        return await register(update, context)  
 
-    context.user_data["last_task_id"] = task_id
+    context.user_data["last_task_id"] = task_id  
 
-    # 🔥 STEP 3: TEXT PARSE
-    import re
+    # 🔥 STEP 3: CLEAN PARSE  
+    import re  
 
-    email_match = re.search(r'Email:\s*([^\n]+)', task_text)
-    password_match = re.search(r'Password:\s*([^\n]+)', task_text)
-    first_match = re.search(r'First name:\s*([^\n]+)', task_text)
-    last_match = re.search(r'Last name:\s*([^\n]+)', task_text)
-    recovery_match = re.search(r'Recovery email\s*([^\s\n]+@gmail\.com)', task_text)
+    email_match = re.search(r'Email:\s*([^\n]+)', task_text)  
+    password_match = re.search(r'Password:\s*([^\n]+)', task_text)  
+    first_match = re.search(r'First name:\s*([^\n]+)', task_text)  
+    last_match = re.search(r'Last name:\s*([^\n]+)', task_text)  
+    recovery_match = re.search(r'Recovery email\s*([^\s\n]+@gmail\.com)', task_text, re.IGNORECASE)  
 
-    email = email_match.group(1).strip() if email_match else None
-    password = password_match.group(1).strip() if password_match else None
-    first_name = first_match.group(1).strip() if first_match else "John"
-    last_name = last_match.group(1).strip() if last_match else "Doe"
-    recovery_email = recovery_match.group(1).strip() if recovery_match else None
+    email = email_match.group(1).strip() if email_match else None  
+    password = password_match.group(1).strip() if password_match else None  
+    first_name = first_match.group(1).strip() if first_match else ""  
+    last_name = last_match.group(1).strip() if last_match else ""  
+    recovery_email = recovery_match.group(1).strip() if recovery_match else None  
 
-    if last_name == "✖️":
-        last_name = ""
+    if last_name == "✖️":  
+        last_name = ""  
 
-    # ❌ Invalid data → retry
-    if not email or not password:
-        await update.message.reply_text("❌ Invalid task data, retrying...")
-        return await register(update, context)
+    if not email or not password:  
+        await update.message.reply_text("❌ Invalid task data, retrying...")  
+        return await register(update, context)  
 
-    if not recovery_email:
-        recovery_email = "NO_RECOVERY"
+    if not recovery_email:  
+        recovery_email = "Not Provided"  
 
-    name = f"{first_name} {last_name}".strip()
-    extra_data = "N/A"
+    name = f"{first_name} {last_name}".strip()  
+    extra_data = "N/A"  
 
-    # 🔥 TEMP STORE
-    temp_data[user.id] = {
-        "name": name,
-        "email": email,
-        "password": password,
-        "recovery_email": recovery_email,
-        "extra": extra_data,
-        "task_id": task_id,
-        "msg_id": msg_id
-    }
+    # 🔥 TEMP STORE  
+    temp_data[user.id] = {  
+        "name": name,  
+        "email": email,  
+        "password": password,  
+        "recovery_email": recovery_email,  
+        "extra": extra_data,  
+        "task_id": task_id,  
+        "msg_id": msg_id  
+    }  
 
-    # 🔥 STEP 4: DB SAVE (DUPLICATE SAFE)
-    now = int(time.time())
-    con = db()
-    cur = con.cursor()
+    # 🔥 STEP 4: DB SAVE  
+    now = int(time.time())  
+    con = db()  
+    cur = con.cursor()  
 
-    cur.execute("""
-    INSERT OR IGNORE INTO registrations(
-        user_id, first_name, last_name, email, password, recovery_email, extra_data, msg_id, created_at, state
-    ) VALUES(?,?,?,?,?,?,?,?,?,?)
-    """, (
-        user.id,
-        first_name,
-        last_name,
-        email,
-        password,
-        recovery_email,
-        extra_data,
-        msg_id,
-        now,
-        "created",
-    ))
+    cur.execute("""  
+    INSERT OR IGNORE INTO registrations(  
+        user_id, first_name, last_name, email, password, recovery_email, extra_data, msg_id, created_at, state  
+    ) VALUES(?,?,?,?,?,?,?,?,?,?)  
+    """, (  
+        user.id,  
+        first_name,  
+        last_name,  
+        email,  
+        password,  
+        recovery_email,  
+        extra_data,  
+        msg_id,  
+        now,  
+        "created",  
+    ))  
 
-    # 🔥 Duplicate → retry
-    if cur.rowcount == 0:
-        await update.message.reply_text("⚠️ Duplicate task मिला, नया ला रहे हैं...")
-        con.close()
-        return await register(update, context)
+    if cur.rowcount == 0:  
+        await update.message.reply_text("⚠️ Duplicate task मिला, नया ला रहे हैं...")  
+        con.close()  
+        return await register(update, context)  
 
-    reg_id = cur.lastrowid
+    reg_id = cur.lastrowid  
 
-    expires_at = now + ACTION_TIMEOUT_HOURS * 3600
+    expires_at = now + ACTION_TIMEOUT_HOURS * 3600  
 
-    cur.execute("""
-    INSERT INTO actions(
-        user_id, reg_id, created_at, expires_at, state
-    ) VALUES(?,?,?,?,?)
-    """, (
-        user.id,
-        reg_id,
-        now,
-        expires_at,
-        "shown",
-    ))
+    cur.execute("""  
+    INSERT INTO actions(  
+        user_id, reg_id, created_at, expires_at, state  
+    ) VALUES(?,?,?,?,?)  
+    """, (  
+        user.id,  
+        reg_id,  
+        now,  
+        expires_at,  
+        "shown",  
+    ))  
 
-    action_id = cur.lastrowid
+    action_id = cur.lastrowid  
 
-    con.commit()
-    con.close()
-
+    con.commit()  
+    con.close()  
+    
     # 🔥 STEP 5: MESSAGE
     msg_text = (
         "Register account using the specified\n"
@@ -3989,7 +3997,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
            
             email = _safe_code(r["email"] if r else "")
             password = _safe_code(r["password"] if r else "")
-
+            
             base_text = (
                 "Register account using the specified\n"
                 "data and get from ₹20 to ₹22\n\n"
@@ -4057,7 +4065,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
            
             email = _safe_code(r["email"] if r else "")
             password = _safe_code(r["password"] if r else "")
-
+            recovery_email = _safe_code(r["recovery_email"])
             base_text = (
                 "Register account using the specified\n"
                 "data and get from ₹20 to ₹22\n\n"
@@ -4095,111 +4103,163 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
             
+      
+    # =========================================================
+    # 🔥 BELOW SAME (UNCHANGED LOGIC)
+    # =========================================================
+
+
         if data.startswith("REG_CONFIRM:"):
-            # CONFIRM AGAIN: show effect in the SAME message, then enforce a 50s cooldown
-            # Real check will run only after cooldown (prevents spam clicks without action)
 
-            # Load registration    
-            con = db()    
-            cur = con.cursor()    
-            cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))    
-            r = cur.fetchone()    
-            con.close()    
+            # Load registration
+            con = db()
+            cur = con.cursor()
+            cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
+            r = cur.fetchone()
+            con.close()
 
-            email = (r["email"] or "").strip()            # Original registration message id (jump target)    
-            target_msg_id = q.message.message_id    
-            chat_id = q.message.chat_id    
+            email = (r["email"] or "").strip()
+            target_msg_id = q.message.message_id
+            chat_id = q.message.chat_id
 
-            # Always create a NEW result message (reply) on every tap (jump via reply header)    
-            confirm_msg_id = None    
-            try:    
-                sent = await context.bot.send_message(    
-                    chat_id=chat_id,    
-                    text=tr(user.id, "email_checking", progress=_confirm_bar(0)),    
-                    reply_to_message_id=target_msg_id,    
-                )    
-                confirm_msg_id = sent.message_id    
-            except Exception:    
-                confirm_msg_id = None    
-
-            # Progress effect (edit separate message)    
-            try:    
-                await q.answer()    
-            except Exception:    
+            # Send checking message
+            confirm_msg_id = None
+            try:
+            sent = await context.bot.send_message(
+            chat_id=chat_id,
+            text="⏳ Checking...",
+            reply_to_message_id=target_msg_id,
+        )
+            confirm_msg_id = sent.message_id
+            except:
                 pass
-            # Animation will run during the real check
-# Cooldown gating (ONLY ONCE per action_id)    
-            now = int(time.time())    
-            ts_key = f"confirm_ts_{action_id}"    
-            ready_key = f"confirm_ready_{action_id}"    
-            first_ts = context.user_data.get(ts_key)    
-            is_ready = bool(context.user_data.get(ready_key, False))    
 
-            if not first_ts:    
-                context.user_data[ts_key] = now    
-                first_ts = now    
+            try:
+                await q.answer()
+            except:
+                pass
 
-            if not is_ready:    
-                elapsed = now - int(first_ts)    
-                if elapsed < CONFIRM_COOLDOWN_SEC:    
-                    remain = CONFIRM_COOLDOWN_SEC - elapsed    
-                    try:    
-                        await _edit_message_safe(    
-                            context.bot,    
-                            chat_id,    
-                            confirm_msg_id,    
-                            f"ERROR"    
-                        )    
-                    except Exception:    
-                        pass    
-                    return    
-                else:    
-                    context.user_data[ready_key] = True    
+    # 🔥 COOLDOWN
+    now = int(time.time())
+    ts_key = f"confirm_ts_{action_id}"
+    ready_key = f"confirm_ready_{action_id}"
 
-    
+    first_ts = context.user_data.get(ts_key)
+    is_ready = bool(context.user_data.get(ready_key, False))
 
-            # After cooldown: perform REAL check
-            handle = (email.split("@")[0] if "@" in email else email).strip()
+    if not first_ts:
+        context.user_data[ts_key] = now
+        first_ts = now
 
-            if confirm_msg_id:
-                ok = await run_check_with_animation(
+    if not is_ready:
+        elapsed = now - int(first_ts)
+
+        if elapsed < CONFIRM_COOLDOWN_SEC:
+            try:
+                await _edit_message_safe(
                     context.bot,
                     chat_id,
                     confirm_msg_id,
-                    "",
-                    action_id,
-                    asyncio.to_thread(_email_handle_exists, handle)
+                    "⏳ Wait..."
                 )
-            else:
-                ok = await asyncio.to_thread(_email_handle_exists, handle)
+            except:
+                pass
+            return
 
-            if not ok:
-                # keep action active for retry
-                set_action_state(action_id, "done1")
-                set_reg_state(a["reg_id"], "created")
+        else:
+            context.user_data[ready_key] = True
 
-                try:
-                    await _edit_message_safe(
-                        context.bot,
-                        chat_id,
-                        confirm_msg_id,
-                        tr(user.id, "recovery_missing", email=f"{handle}@gmail.com")
-                    )
-                except Exception:
-                    pass
+    # =========================================================
+    # 🔥 USERBOT CONFIRM CALL
+    # =========================================================
 
-                # Back to original message with confirm button still active
-                try:
-                    await q.edit_message_reply_markup(
-                        reply_markup=confirm_again_button(action_id)
-                    )
-                except Exception:
-                    pass
-                return
+    await userbot.handle_job({
+        "type": "confirm",
+        "user": user.id
+    })
+
+    # =========================================================
+    # 🔥 RESULT DB READ
+    # =========================================================
+
+    import sqlite3
+
+    def get_result(user_id):
+
+        con = sqlite3.connect("userbot.db")
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+
+        cur.execute("""
+        SELECT * FROM results
+        WHERE user_id=?
+        ORDER BY id DESC LIMIT 1
+        """, (user_id,))
+
+        row = cur.fetchone()
+        con.close()
+
+        return dict(row) if row else None
+
+    result = None
+
+    for _ in range(30):
+
+        result = get_result(user.id)
+
+        if result:
+            break
+
+        await asyncio.sleep(1)
+
+    if not result:
+        try:
+            await _edit_message_safe(
+                context.bot,
+                chat_id,
+                confirm_msg_id,
+                "❌ Timeout, try again"
+            )
+        except:
+            pass
+        return
+
+    ok = True if result["status"] == "success" else False
+
+    # =========================================================
+    # 🔥 ORIGINAL FLOW
+    # =========================================================
+
+    if not ok:
+
+        set_action_state(action_id, "done1")
+        set_reg_state(a["reg_id"], "created")
+
+        try:
+            await _edit_message_safe(
+                context.bot,
+                chat_id,
+                confirm_msg_id,
+                f"❌ Failed: {email}"
+            )
+        except:
+            pass
+
+        try:
+            await q.edit_message_reply_markup(
+                reply_markup=confirm_again_button(action_id)
+            )
+        except:
+            pass
+
+        return
+
+    # ✅ SUCCESS FLOW
+    set_action_state(action_id, "waiting_admin")
+    set_reg_state(a["reg_id"], "confirmed_by_user")
+            
+
                 
-            # RIGHT flow    
-            set_action_state(action_id, "waiting_admin")    
-            set_reg_state(a["reg_id"], "confirmed_by_user")    
 
             # ✅ Provisional reward: add HOLD immediately on RIGHT result (reverted if admin rejects)
             try:
@@ -4263,7 +4323,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
            
             email = _safe_code(r["email"] if r else "")
             password = _safe_code(r["password"] if r else "")
-
+            recovery_email = _safe_code(r["recovery_email"])
             # ✅ Save to form_table ONLY after CONFIRM AGAIN + RIGHT result
             try:
                 save_form_row(
@@ -4272,6 +4332,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     name,
                     email,
                     password,
+                    recovery_email,
                     int(r["created_at"] or int(time.time())) if r else int(time.time()),
                 )
             except Exception:
