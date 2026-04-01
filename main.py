@@ -6114,12 +6114,11 @@ def main():
 
     # ✅ Gmail sync is scheduled in _post_init()
 
-    async def main():
+    async def start_all():
     print("🚀 Starting USERBOT...")
     await userbot.start_userbot()
 
     print("🚀 Starting MAIN BOT...")
-
     port = int(os.environ.get("PORT", "8080"))
 
     public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_STATIC_URL") or "").strip()
@@ -6151,4 +6150,5 @@ def main():
         drop_pending_updates=True,
     )
     if __name__ == "__main__":
-    asyncio.run(main())
+    import asyncio
+    asyncio.run(start_all())
