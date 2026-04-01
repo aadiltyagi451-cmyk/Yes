@@ -182,12 +182,15 @@ async def handle_job(job):
         await confirm_task(job["user"])
 
 # ========= MAIN =========
-async def main():
+async def start_userbot():
     for i, c in enumerate(clients):
         await c.start()
         print("CLIENT READY:", i)
 
+    # background loop (non-blocking)
+    asyncio.create_task(_keep_alive())
+
+
+async def _keep_alive():
     while True:
         await asyncio.sleep(5)
-
-asyncio.run(main())
