@@ -31,7 +31,7 @@ async def start_process(name, cmd):
 
 async def main():
     await asyncio.gather(
-        start_process("MAIN BOT", "main_bot.py"),
+        start_process("MAIN BOT", "main.py"),
         start_process("USERBOT", "userbot.py"),
     )
 
