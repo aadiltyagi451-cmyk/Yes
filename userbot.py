@@ -170,27 +170,50 @@ def save_result(user_id, task_id, status):
 
     con.commit()
     con.close()
-
-# ========= MANUAL TRIGGER (IMPORTANT) =========
+# ========= MANUAL TRIGGER =========
 # 👇 main bot se call karoge
 
 async def handle_job(job):
-    if job["type"] == "fetch":
-        await fetch_task(job["user"])
+    try:
+        if job.get("type") == "fetch":
+            await fetch_task(job.get("user"))
 
-    elif job["type"] == "confirm":
-        await confirm_task(job["user"])
+        elif job.get("type") == "confirm":
+            await confirm_task(job.get("user"))
 
-# ========= MAIN =========
+    except Exception as e:
+        print("[USERBOT] ❌ handle_job error:", e)
+
+
+# ========= START USERBOT =========
+
+_started = False  # 🔥 duplicate start prevent
+
 async def start_userbot():
+    global _started
+
+    if _started:
+        print("[USERBOT] ⚠️ Already started, skipping...")
+        return
+
+    _started = True
+
     for i, c in enumerate(clients):
-        await c.start()
-        print("CLIENT READY:", i)
+        try:
+            await c.start()
+            print(f"[USERBOT] CLIENT READY: {i}")
+        except Exception as e:
+            print(f"[USERBOT] ❌ Client {i} failed:", e)
 
     # background loop (non-blocking)
     asyncio.create_task(_keep_alive())
 
 
+# ========= KEEP ALIVE =========
+
 async def _keep_alive():
     while True:
-        await asyncio.sleep(5)
+        try:
+            await asyncio.sleep(5)
+        except Exception as e:
+            print("[USERBOT] keep_alive error:", e)
