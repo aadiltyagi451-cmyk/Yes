@@ -6071,7 +6071,7 @@ async def _post_init(application: Application):
         print(f"[SYNC] schedule failed: {e!r}")
 
 def main():
-    # Restore DB from Google Drive before initializing (best-effort)
+    # Restore DB
     try:
         if _drive_enabled():
             _drive_stats["enabled"] = True
@@ -6090,7 +6090,6 @@ def main():
     app.add_handler(CommandHandler("syncstat", syncstat_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
-    # Admin-only Drive backup commands
     app.add_handler(CommandHandler("backupnow", backupnow_cmd))
     app.add_handler(CommandHandler("backupstat", backupstat_cmd))
     app.add_handler(CommandHandler("formimg", formimg_cmd))
@@ -6099,32 +6098,36 @@ def main():
     # Callbacks
     app.add_handler(CallbackQueryHandler(callbacks))
 
-    # Admin content handlers (broadcast media/text + auto reply config)
+    # Handlers
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, admin_content_handler), group=0)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_content_handler), group=0)
-
-    # UPI input handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, upi_handler), group=1)
-
-    # Admin menu handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_menu_handler), group=2)
-
-    # User menu handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler), group=3)
 
-    # ✅ Gmail sync is scheduled in _post_init()
+    return app  # 👈 IMPORTANT
 
-    async def start_all():
+
+# =========================
+# 🔥 START ALL (OUTSIDE main)
+# =========================
+
+import asyncio
+import userbot
+
+async def start_all():
     print("🚀 Starting USERBOT...")
     await userbot.start_userbot()
 
     print("🚀 Starting MAIN BOT...")
+    app = main()
+
     port = int(os.environ.get("PORT", "8080"))
 
     public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_STATIC_URL") or "").strip()
 
     if not public_domain:
-        print("⚠️ No Railway public domain found; falling back to polling.")
+        print("⚠️ No Railway domain → polling mode")
         await app.initialize()
         await app.start()
         await app.updater.start_polling()
@@ -6139,7 +6142,6 @@ def main():
 
     await app.initialize()
     await app.start()
-
     await app.bot.set_webhook(webhook_url)
 
     await app.run_webhook(
@@ -6149,6 +6151,11 @@ def main():
         webhook_url=webhook_url,
         drop_pending_updates=True,
     )
-    if __name__ == "__main__":
-    import asyncio
+
+
+# =========================
+# 🚀 ENTRY POINT
+# =========================
+
+if __name__ == "__main__":
     asyncio.run(start_all())
