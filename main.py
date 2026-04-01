@@ -4110,153 +4110,154 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if data.startswith("REG_CONFIRM:"):
 
-    # Load registration
-    con = db()
-    cur = con.cursor()
-    cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
-    r = cur.fetchone()
-    con.close()
+            # Load registration
+            con = db()
+            cur = con.cursor()
+            cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
+            r = cur.fetchone()
+            con.close()
 
-    email = (r["email"] or "").strip()
-    target_msg_id = q.message.message_id
-    chat_id = q.message.chat_id
+            email = (r["email"] or "").strip()
+            target_msg_id = q.message.message_id
+            chat_id = q.message.chat_id
 
-    # Send checking message
-    confirm_msg_id = None
-    try:
-        sent = await context.bot.send_message(
-            chat_id=chat_id,
-            text="⏳ Checking...",
-            reply_to_message_id=target_msg_id,
-        )
-        confirm_msg_id = sent.message_id
-    except:
-        pass
-
-    try:
-        await q.answer()
-    except:
-        pass
-
-    # 🔥 COOLDOWN
-    now = int(time.time())
-    ts_key = f"confirm_ts_{action_id}"
-    ready_key = f"confirm_ready_{action_id}"
-
-    first_ts = context.user_data.get(ts_key)
-    is_ready = bool(context.user_data.get(ready_key, False))
-
-    if not first_ts:
-        context.user_data[ts_key] = now
-        first_ts = now
-
-    if not is_ready:
-        elapsed = now - int(first_ts)
-
-        if elapsed < CONFIRM_COOLDOWN_SEC:
+            # Send checking message
+            confirm_msg_id = None
             try:
-                await _edit_message_safe(
-                    context.bot,
-                    chat_id,
-                    confirm_msg_id,
-                    "⏳ Wait..."
+                sent = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Checking...",
+                    reply_to_message_id=target_msg_id,
                 )
+                confirm_msg_id = sent.message_id
             except:
                 pass
-            return
-        else:
-            context.user_data[ready_key] = True
 
-    # =========================================================
-    # 🔥 USERBOT CONFIRM CALL
-    # =========================================================
+            try:
+                await q.answer()
+            except:
+                pass
 
-    await userbot.handle_job({
-        "type": "confirm",
-        "user": user.id
-    })
+            # 🔥 COOLDOWN
+            now = int(time.time())
+            ts_key = f"confirm_ts_{action_id}"
+            ready_key = f"confirm_ready_{action_id}"
+
+            first_ts = context.user_data.get(ts_key)
+            is_ready = bool(context.user_data.get(ready_key, False))
+
+            if not first_ts:
+                context.user_data[ts_key] = now
+                first_ts = now
+
+            if not is_ready:
+                elapsed = now - int(first_ts)
+
+                if elapsed < CONFIRM_COOLDOWN_SEC:
+                    try:
+                        await _edit_message_safe(
+                            context.bot,
+                            chat_id,
+                            confirm_msg_id,
+                            "⏳ Wait..."
+                        )
+                    except:
+                        pass
+                    return
+                else:
+                    context.user_data[ready_key] = True
+
+            # =========================================================
+            # 🔥 USERBOT CONFIRM CALL
+            # =========================================================
+
+            await userbot.handle_job({
+                "type": "confirm",
+                "user": user.id
+            })
+
+            # =========================================================
+            # 🔥 RESULT DB READ
+            # =========================================================
+
+            import sqlite3
+
+            def get_result(user_id):
+
+                con = sqlite3.connect("userbot.db")
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+
+                cur.execute("""
+                SELECT * FROM results
+                WHERE user_id=?
+                ORDER BY id DESC LIMIT 1
+                """, (user_id,))
+
+                row = cur.fetchone()
+                con.close()
+
+                return dict(row) if row else None
+
+            result = None
+
+            for _ in range(30):
+
+                result = get_result(user.id)
+
+                if result:
+                    break
+
+                await asyncio.sleep(1)
+
+            if not result:
+                try:
+                    await _edit_message_safe(
+                        context.bot,
+                        chat_id,
+                        confirm_msg_id,
+                        "❌ Timeout, try again"
+                    )
+                except:
+                    pass
+                return
+
+            ok = True if result["status"] == "success" else False
+
+            # =========================================================
+            # 🔥 ORIGINAL FLOW
+            # =========================================================
+
+            if not ok:
+
+                set_action_state(action_id, "done1")
+                set_reg_state(a["reg_id"], "created")
+
+                try:
+                    await _edit_message_safe(
+                        context.bot,
+                        chat_id,
+                        confirm_msg_id,
+                        f"❌ Failed: {email}"
+                    )
+                except:
+                    pass
+
+                try:
+                    await q.edit_message_reply_markup(
+                        reply_markup=confirm_again_button(action_id)
+                    )
+                except:
+                    pass
+
+                return
+
+            # ✅ SUCCESS FLOW
+            set_action_state(action_id, "waiting_admin")
+            set_reg_state(a["reg_id"], "confirmed_by_user")
         
 
-    # =========================================================
-    # 🔥 RESULT DB READ
-    # =========================================================
-
-    import sqlite3
-
-    def get_result(user_id):
-
-        con = sqlite3.connect("userbot.db")
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-
-        cur.execute("""
-        SELECT * FROM results
-        WHERE user_id=?
-        ORDER BY id DESC LIMIT 1
-        """, (user_id,))
-
-        row = cur.fetchone()
-        con.close()
-
-        return dict(row) if row else None
-
-    result = None
-
-    for _ in range(30):
-
-        result = get_result(user.id)
-
-        if result:
-            break
-
-        await asyncio.sleep(1)
-
-    if not result:
-        try:
-            await _edit_message_safe(
-                context.bot,
-                chat_id,
-                confirm_msg_id,
-                "❌ Timeout, try again"
-            )
-        except:
-            pass
-        return
-
-    ok = True if result["status"] == "success" else False
-
-    # =========================================================
-    # 🔥 ORIGINAL FLOW
-    # =========================================================
-
-    if not ok:
-
-        set_action_state(action_id, "done1")
-        set_reg_state(a["reg_id"], "created")
-
-        try:
-            await _edit_message_safe(
-                context.bot,
-                chat_id,
-                confirm_msg_id,
-                f"❌ Failed: {email}"
-            )
-        except:
-            pass
-
-        try:
-            await q.edit_message_reply_markup(
-                reply_markup=confirm_again_button(action_id)
-            )
-        except:
-            pass
-
-        return
-
-    # ✅ SUCCESS FLOW
-    set_action_state(action_id, "waiting_admin")
-    set_reg_state(a["reg_id"], "confirmed_by_user")
-            
+        
 
                 
 
