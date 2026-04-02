@@ -6110,34 +6110,38 @@ def main():
 # =========================
 # 🔥 START ALL (OUTSIDE main)
 # =========================
-
-async def main():
+async def run():
     print("🚀 MAIN BOT running...")
 
     port = int(os.environ.get("PORT", "8080"))
     public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or
                      os.environ.get("RAILWAY_STATIC_URL") or "").strip()
 
-    # Dummy initialization / webhook
-    if not public_domain:
-        print("⚠️ No Railway domain → polling mode")
-        # Yahan apna polling code daal do
-        while True:
-            await asyncio.sleep(5)
-        return
+    app = main()  # <-- use your original main
 
-    url_path = (os.environ.get("WEBHOOK_PATH") or "").strip().lstrip("/")
-    if not url_path:
-        url_path = "dummy_token"
+    if public_domain:  # webhook mode
+        url_path = (os.environ.get("WEBHOOK_PATH") or "").strip().lstrip("/")
+        if not url_path:
+            url_path = "dummy_token"
 
-    webhook_url = f"https://{public_domain}/{url_path}"
-    print("🌐 Webhook URL:", webhook_url)
+        webhook_url = f"https://{public_domain}/{url_path}"
+        print("🌐 Webhook URL:", webhook_url)
 
-    # Dummy loop for webhook
-    while True:
-        await asyncio.sleep(5)
+        await app.initialize()
+        await app.start_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path=url_path,
+            webhook_url=webhook_url,
+        )
+        await app.updater.start_polling()  # optional fallback
+        print("✅ Webhook started")
+        await asyncio.Event().wait()  # keep running
 
-# Standalone run option
+    else:  # polling fallback
+        print("⚠️ No public domain, fallback → polling mode")
+        await app.run_polling()
+
+# Standalone run
 if __name__ == "__main__":
-    print("MAIN BOT started directly...")
-    asyncio.run(main())
+    asyncio.run(run())
