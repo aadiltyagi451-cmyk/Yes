@@ -185,13 +185,11 @@ async def handle_job(job):
         print("[USERBOT] ❌ handle_job error:", e)
 
 
-# ========= START USERBOT =========
 
-_started = False  # 🔥 duplicate start prevent
+_started = False
 
 async def start_userbot():
     global _started
-
     if _started:
         print("[USERBOT] ⚠️ Already started")
         return
@@ -199,23 +197,28 @@ async def start_userbot():
     _started = True
 
     for i, c in enumerate(clients):
-        try:
-            print(f"[USERBOT] Connecting client {i}...")
+        while True:  # retry loop per client
+            try:
+                print(f"[USERBOT] Connecting client {i}...")
+                await c.connect()
 
-            await c.connect()
+                if not await c.is_user_authorized():
+                    raise Exception("Session not authorized")
 
-            if not await c.is_user_authorized():
-                print(f"[USERBOT] ❌ Client {i} NOT AUTHORIZED")
-                continue   # ❌ raise hatao, skip karo
+                print(f"[USERBOT] ✅ CLIENT READY: {i}")
+                break  # exit retry loop for this client
+            except Exception as e:
+                print(f"[USERBOT] ❌ Client {i} ERROR: {e}")
+                print("[USERBOT] Retrying in 5 seconds...")
+                await asyncio.sleep(5)
 
-            print(f"[USERBOT] ✅ CLIENT READY: {i}")
-
-        except Exception as e:
-            print(f"[USERBOT] ❌ Client {i} ERROR:", repr(e))
-            continue   # ❌ raise hatao, skip karo
-
-    # 🔥 ensure at least 1 client working
-    if not any([await c.is_connected() for c in clients]):
-        print("[USERBOT] ❌ No working clients, but NOT crashing")
-
+    # start keep_alive in background
     asyncio.create_task(_keep_alive())
+
+async def _keep_alive():
+    while True:
+        try:
+            await asyncio.sleep(5)
+        except Exception as e:
+            print("[USERBOT] keep_alive error:", e)
+
