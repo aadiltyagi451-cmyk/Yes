@@ -6111,54 +6111,33 @@ def main():
 # 🔥 START ALL (OUTSIDE main)
 # =========================
 
-async def start_all():
-    # Start USERBOT safely in background
-    asyncio.create_task(safe_start_userbot())
-
-    print("🚀 Starting MAIN BOT...")
-    app = main()
+async def main():
+    print("🚀 MAIN BOT running...")
 
     port = int(os.environ.get("PORT", "8080"))
-    public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_STATIC_URL") or "").strip()
+    public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or
+                     os.environ.get("RAILWAY_STATIC_URL") or "").strip()
 
+    # Dummy initialization / webhook
     if not public_domain:
         print("⚠️ No Railway domain → polling mode")
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling()
+        # Yahan apna polling code daal do
+        while True:
+            await asyncio.sleep(5)
         return
 
     url_path = (os.environ.get("WEBHOOK_PATH") or "").strip().lstrip("/")
     if not url_path:
-        url_path = str(BOT_TOKEN).strip().lstrip("/")
+        url_path = "dummy_token"
 
     webhook_url = f"https://{public_domain}/{url_path}"
     print("🌐 Webhook URL:", webhook_url)
 
-    await app.initialize()
-    await app.start()
-    await app.bot.set_webhook(webhook_url)
-
-    await app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=url_path,
-        webhook_url=webhook_url,
-        drop_pending_updates=True,
-    )
-
-# =========================
-# Helper: Safe USERBOT start
-# =========================
-async def safe_start_userbot():
+    # Dummy loop for webhook
     while True:
-        try:
-            await start_userbot()
-            print("[USERBOT] Started successfully")
-            return
-        except Exception as e:
-            print(f"[USERBOT] crashed, retrying in 5 sec... {e}")
-            await asyncio.sleep(5)
+        await asyncio.sleep(5)
 
+# Standalone run option
 if __name__ == "__main__":
-    asyncio.run(start_all())
+    print("MAIN BOT started directly...")
+    asyncio.run(main())
