@@ -5,7 +5,6 @@ import sqlite3
 import threading
 import os
 import asyncio
-from userbot import start_userbot
 import socket
 import json
 import hmac
