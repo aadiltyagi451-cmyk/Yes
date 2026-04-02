@@ -6117,7 +6117,9 @@ import userbot
 
 async def start_all():
     print("🚀 Starting USERBOT...")
-    await userbot.start_userbot()
+
+    # 🔥 NON-BLOCKING (IMPORTANT)
+    asyncio.create_task(userbot.start_userbot())
 
     print("🚀 Starting MAIN BOT...")
     app = main()
@@ -6152,10 +6154,6 @@ async def start_all():
         drop_pending_updates=True,
     )
 
-
-# =========================
-# 🚀 ENTRY POINT
-# =========================
 
 if __name__ == "__main__":
     asyncio.run(start_all())
