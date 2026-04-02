@@ -193,19 +193,26 @@ async def start_userbot():
     global _started
 
     if _started:
-        print("[USERBOT] ⚠️ Already started, skipping...")
+        print("[USERBOT] ⚠️ Already started")
         return
 
     _started = True
 
     for i, c in enumerate(clients):
         try:
-            await c.start()
-            print(f"[USERBOT] CLIENT READY: {i}")
-        except Exception as e:
-            print(f"[USERBOT] ❌ Client {i} failed:", e)
+            print(f"[USERBOT] Connecting client {i}...")
 
-    # background loop (non-blocking)
+            await c.connect()
+
+            if not await c.is_user_authorized():
+                raise Exception("Session not authorized")
+
+            print(f"[USERBOT] ✅ CLIENT READY: {i}")
+
+        except Exception as e:
+            print(f"[USERBOT] ❌ Client {i} ERROR:", repr(e))
+            raise
+
     asyncio.create_task(_keep_alive())
 
 
