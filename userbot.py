@@ -185,11 +185,12 @@ async def handle_job(job):
         print("[USERBOT] ❌ handle_job error:", e)
 
 
-
 _started = False
+clients = []  # Yahan apne Telegram client objects daalna
 
 async def start_userbot():
     global _started
+
     if _started:
         print("[USERBOT] ⚠️ Already started")
         return
@@ -197,22 +198,18 @@ async def start_userbot():
     _started = True
 
     for i, c in enumerate(clients):
-        while True:  # retry loop per client
-            try:
-                print(f"[USERBOT] Connecting client {i}...")
-                await c.connect()
+        try:
+            print(f"[USERBOT] Connecting client {i}...")
+            await c.connect()
 
-                if not await c.is_user_authorized():
-                    raise Exception("Session not authorized")
+            if not await c.is_user_authorized():
+                raise Exception("Session not authorized")
 
-                print(f"[USERBOT] ✅ CLIENT READY: {i}")
-                break  # exit retry loop for this client
-            except Exception as e:
-                print(f"[USERBOT] ❌ Client {i} ERROR: {e}")
-                print("[USERBOT] Retrying in 5 seconds...")
-                await asyncio.sleep(5)
+            print(f"[USERBOT] ✅ CLIENT READY: {i}")
+        except Exception as e:
+            print(f"[USERBOT] ❌ Client {i} ERROR:", repr(e))
+            raise
 
-    # start keep_alive in background
     asyncio.create_task(_keep_alive())
 
 async def _keep_alive():
@@ -221,4 +218,14 @@ async def _keep_alive():
             await asyncio.sleep(5)
         except Exception as e:
             print("[USERBOT] keep_alive error:", e)
+
+# Standalone run option
+if __name__ == "__main__":
+    import sys
+    import os
+
+    # Agar aap direct run kar rahe ho to ek dummy client daal sakte ho
+    print("USERBOT started directly...")
+    asyncio.run(start_userbot())
+
 
