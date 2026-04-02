@@ -12,7 +12,6 @@ async def start_process(name, cmd):
             stderr=asyncio.subprocess.PIPE
         )
 
-        # 🔥 LOG STREAM
         async def log_stream(stream, prefix):
             while True:
                 line = await stream.readline()
@@ -28,11 +27,11 @@ async def start_process(name, cmd):
         print(f"❌ {name} crashed. Restarting in 3 sec...")
         await asyncio.sleep(3)
 
-
 async def main():
     await asyncio.gather(
         start_process("MAIN BOT", "bot_app.py"),
         start_process("USERBOT", "userbot.py"),
     )
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
