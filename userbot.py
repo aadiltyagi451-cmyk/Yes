@@ -205,22 +205,17 @@ async def start_userbot():
             await c.connect()
 
             if not await c.is_user_authorized():
-                raise Exception("Session not authorized")
+                print(f"[USERBOT] ❌ Client {i} NOT AUTHORIZED")
+                continue   # ❌ raise hatao, skip karo
 
             print(f"[USERBOT] ✅ CLIENT READY: {i}")
 
         except Exception as e:
             print(f"[USERBOT] ❌ Client {i} ERROR:", repr(e))
-            raise
+            continue   # ❌ raise hatao, skip karo
+
+    # 🔥 ensure at least 1 client working
+    if not any([await c.is_connected() for c in clients]):
+        print("[USERBOT] ❌ No working clients, but NOT crashing")
 
     asyncio.create_task(_keep_alive())
-
-
-# ========= KEEP ALIVE =========
-
-async def _keep_alive():
-    while True:
-        try:
-            await asyncio.sleep(5)
-        except Exception as e:
-            print("[USERBOT] keep_alive error:", e)
