@@ -172,30 +172,10 @@ async def handle_job(job):
 # ========= START USERBOT =========
 _started = False
 async def start_userbot():
-    global _started
-    if _started:
-        print("[USERBOT] ⚠️ Already started")
-        return
-    _started = True
-
-    if not clients:
-        print("[USERBOT] ⚠️ No clients loaded. Running in idle mode.")
-        asyncio.create_task(_keep_alive())
-        return
-
-    for i, c in enumerate(clients):
-        try:
-            print(f"[USERBOT] Connecting client {i}...")
-            await c.connect()
-            if not await c.is_user_authorized():
-                print(f"[USERBOT] ⚠️ Client {i} not authorized, skipping...")
-                continue
-            print(f"[USERBOT] ✅ CLIENT READY: {i}")
-        except Exception as e:
-            print(f"[USERBOT] ❌ Client {i} ERROR:", repr(e))
-
-    asyncio.create_task(_keep_alive())
-
+    await client.start()
+    print("USERBOT ✅ CLIENT READY")
+    # ye line takriban infinite wait rakhti hai jab tak client disconnect na ho
+    await client.run_until_disconnected()
 async def _keep_alive():
     while True:
         await asyncio.sleep(5)
