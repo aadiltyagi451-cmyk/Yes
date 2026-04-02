@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-import userbot
 import re
 import time
 import sqlite3
 import threading
 import os
+import asyncio
+from userbot import start_userbot
+from main import main
 import socket
 import json
 import hmac
@@ -13,7 +15,6 @@ from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timedelta
 import random
 import string
-import asyncio
 import requests
 import math
 import smtplib
@@ -6112,20 +6113,14 @@ def main():
 # 🔥 START ALL (OUTSIDE main)
 # =========================
 
-import asyncio
-import userbot
-
 async def start_all():
-    print("🚀 Starting USERBOT...")
-
-    # 🔥 NON-BLOCKING (IMPORTANT)
-    asyncio.create_task(userbot.start_userbot())
+    # Start USERBOT safely in background
+    asyncio.create_task(safe_start_userbot())
 
     print("🚀 Starting MAIN BOT...")
     app = main()
 
     port = int(os.environ.get("PORT", "8080"))
-
     public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_STATIC_URL") or "").strip()
 
     if not public_domain:
@@ -6154,6 +6149,18 @@ async def start_all():
         drop_pending_updates=True,
     )
 
+# =========================
+# Helper: Safe USERBOT start
+# =========================
+async def safe_start_userbot():
+    while True:
+        try:
+            await start_userbot()
+            print("[USERBOT] Started successfully")
+            return
+        except Exception as e:
+            print(f"[USERBOT] crashed, retrying in 5 sec... {e}")
+            await asyncio.sleep(5)
 
 if __name__ == "__main__":
     asyncio.run(start_all())
