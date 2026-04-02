@@ -6,7 +6,6 @@ import threading
 import os
 import asyncio
 from userbot import start_userbot
-from bot_app import main
 import socket
 import json
 import hmac
