@@ -6104,19 +6104,42 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_menu_handler), group=2)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler), group=3)
 
-    return app  # 👈 IMPORTANT
+     # =========================
+    # WEBHOOK / POLLING HYBRID (Railway)
+    # =========================
+    print("✅ Bot starting...")
 
+    port = int(os.environ.get("PORT", "8080"))
 
-# =========================
-# 🔥 START ALL (OUTSIDE main)
-# =========================
-async def run():
-    print("🚀 MAIN BOT running in polling mode...")
-    app = main()
-    await app.run_polling()
+    # Railway public domain fallback
+    public_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or
+                     os.environ.get("RAILWAY_STATIC_URL") or "").strip()
+
+    if public_domain:
+        # WEBHOOK MODE
+        url_path = (os.environ.get("WEBHOOK_PATH") or "").strip().lstrip("/")
+        if not url_path:
+            url_path = str(BOT_TOKEN).strip().lstrip("/")
+
+        webhook_url = f"https://{public_domain}/{url_path}"
+        print("🌐 Webhook URL:", webhook_url)
+
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path=url_path,
+            webhook_url=webhook_url,
+            drop_pending_updates=True
+        )
+        print("✅ Webhook started")
+    else:
+        # POLLING FALLBACK
+        print("⚠️ No public domain found; falling back to polling.")
+        app.run_polling(drop_pending_updates=True)
+        print("✅ Polling started")
 
 # ========================
 # 🔹 ENTRY POINT
 # ========================
 if __name__ == "__main__":
-    asyncio.run(run())
+    main()
