@@ -3500,6 +3500,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     con.commit()  
     con.close()  
+    # 🔥 ESCAPE FOR MARKDOWN (MOST IMPORTANT)
+name = escape_markdown(name, version=2)
+email = escape_markdown(email, version=2)
+password = escape_markdown(password, version=2)
+recovery_email = escape_markdown(recovery_email, version=2)
     
     # 🔥 STEP 5: SAFE MESSAGE
     msg_text = (
