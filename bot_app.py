@@ -3500,19 +3500,20 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     con.commit()  
     con.close()  
-    # 🔥 ESCAPE FOR MARKDOWN (MOST IMPORTANT)
-name = escape_markdown(name, version=2)
-email = escape_markdown(email, version=2)
-password = escape_markdown(password, version=2)
-recovery_email = escape_markdown(recovery_email, version=2)
-    
-    # 🔥 STEP 5: SAFE MESSAGE
+# 🔥 STEP 5: MESSAGE
+
+    # ESCAPE
+    name = escape_markdown(name, version=2)
+    email = escape_markdown(email, version=2)
+    password = escape_markdown(password, version=2)
+    recovery_email = escape_markdown(recovery_email, version=2)
+
     msg_text = (
         "Register account using the specified\n"
         "data and get from ₹20 to ₹22\n\n"
         f"Name: `{name}`\n\n"
-        f"Email: `{email_safe}`\n\n"
-        f"Password: `{password_safe}`\n\n"
+        f"Email: `{email}`\n\n"
+        f"Password: `{password}`\n\n"
         "🔐 Be sure to use the specified data,\n"
         "otherwise the account will not be paid\n"
         "=========================\n"
@@ -3522,7 +3523,7 @@ recovery_email = escape_markdown(recovery_email, version=2)
 
         "\n________________________\n"
         "🚦 Recovery Email:\n"
-        f"`{recovery_safe}`\n"
+        f"`{recovery_email}`\n"
     )
 
     await update.message.reply_text(
