@@ -36,7 +36,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-
+from telegram.helpers import escape_markdown
 from reportlab.lib.pagesizes import A4, A2, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
@@ -3357,6 +3357,8 @@ async def _request_userbot_job(job_type: str, user_id: int, payload: dict | None
 # REGISTER (THIS MUST BE ASYNC)
 # =========================
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):  
+    
+
     user = update.effective_user  
 
     # 🔥 STEP 1: USERBOT KO TASK FETCH KARNE BOLO  
@@ -3364,9 +3366,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("⏳ Fetching task... Please wait")  
 
-    # 🔥 STEP 2: DB SE TASK LO (API REMOVE)  
-    import sqlite3
-
+    # 🔥 STEP 2: DB SE TASK LO  
     def get_task(user_id):
         con = sqlite3.connect("userbot.db")
         con.row_factory = sqlite3.Row
@@ -3411,8 +3411,6 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["last_task_id"] = task_id  
 
     # 🔥 STEP 3: CLEAN PARSE  
-    import re  
-
     email_match = re.search(r'Email:\s*([^\n]+)', task_text)  
     password_match = re.search(r'Password:\s*([^\n]+)', task_text)  
     first_match = re.search(r'First name:\s*([^\n]+)', task_text)  
@@ -3435,12 +3433,18 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not recovery_email:  
         recovery_email = "Not Provided"  
 
-    name = f"{first_name} {last_name}".strip()  
+    name_raw = f"{first_name} {last_name}".strip()  
     extra_data = "N/A"  
+
+    # 🔥 Markdown SAFE VALUES
+    name = escape_markdown(name_raw, version=2)
+    email_safe = escape_markdown(email, version=2)
+    password_safe = escape_markdown(password, version=2)
+    recovery_safe = escape_markdown(recovery_email, version=2)
 
     # 🔥 TEMP STORE  
     temp_data[user.id] = {  
-        "name": name,  
+        "name": name_raw,  
         "email": email,  
         "password": password,  
         "recovery_email": recovery_email,  
@@ -3497,13 +3501,13 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     con.commit()  
     con.close()  
     
-    # 🔥 STEP 5: MESSAGE
+    # 🔥 STEP 5: SAFE MESSAGE
     msg_text = (
         "Register account using the specified\n"
         "data and get from ₹20 to ₹22\n\n"
         f"Name: `{name}`\n\n"
-        f"Email: `{email}`\n\n"
-        f"Password: `{password}`\n\n"
+        f"Email: `{email_safe}`\n\n"
+        f"Password: `{password_safe}`\n\n"
         "🔐 Be sure to use the specified data,\n"
         "otherwise the account will not be paid\n"
         "=========================\n"
@@ -3513,12 +3517,12 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         "\n________________________\n"
         "🚦 Recovery Email:\n"
-        f"`{recovery_email}`\n"
+        f"`{recovery_safe}`\n"
     )
 
     await update.message.reply_text(
         msg_text,
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
         reply_markup=reg_buttons(action_id, task_id)
     )
 # =========================
