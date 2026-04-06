@@ -3373,7 +3373,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cur = con.cursor()
 
         cur.execute("""
-        SELECT first_name, last_name, email, password, recovery_email, task_id, msg_id
+        SELECT first_name, email, password, recovery_email, task_id, msg_id
         FROM tasks
         WHERE user_id=?
         ORDER BY id DESC LIMIT 1
