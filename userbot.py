@@ -50,7 +50,7 @@ def init_db():
 
         task_text TEXT,
 
-        name TEXT,
+        first_name TEXT,
         email TEXT,
         password TEXT,
         recovery TEXT,
