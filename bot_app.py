@@ -3397,7 +3397,6 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🔥 DIRECT VALUES
     first_name = task_data.get("first_name", "")
-    last_name = task_data.get("last_name", "")
     email = task_data.get("email")
     password = task_data.get("password")
     recovery_email = task_data.get("recovery_email") or "Not Provided"
@@ -3413,12 +3412,12 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["last_task_id"] = task_id
 
     # 🔥 Markdown Safe
-    name_raw = f"{first_name} {last_name}".strip()
+    name_raw = first_name.strip()
+
     name = escape_markdown(name_raw, version=2)
     email_safe = escape_markdown(email, version=2)
     password_safe = escape_markdown(password, version=2)
     recovery_safe = escape_markdown(recovery_email, version=2)
-
     # 🔥 TEMP STORE
     temp_data[user.id] = {
         "name": name_raw,
