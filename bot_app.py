@@ -3435,12 +3435,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cur.execute("""
     INSERT INTO registrations(
-        user_id, first_name, last_name, email, password, recovery_email, created_at, state
-    ) VALUES(?,?,?,?,?,?,?,?)
+        user_id, first_name, email, password, recovery_email, created_at, state
+    ) VALUES(?,?,?,?,?,?,?)
     """, (
         user.id,
         first_name,
-        last_name,
         email,
         password,
         recovery_email,
