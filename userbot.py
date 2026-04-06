@@ -135,7 +135,7 @@ def parse_task(text):
     recovery = recovery.group(1).strip() if recovery else "Not Provided"
 
 
-    name = first_name.strip()
+    name = f"{first} {last}".strip()
     
 
     # 🔥 Markdown SAFE
