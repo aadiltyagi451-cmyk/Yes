@@ -51,9 +51,10 @@ def init_db():
         task_text TEXT,
 
         first_name TEXT,
+        last_name Text,
         email TEXT,
         password TEXT,
-        recovery TEXT,
+        recovery_email TEXT,
 
         task_id TEXT,
         msg_id INTEGER,
@@ -133,10 +134,9 @@ def parse_task(text):
     last = last.group(1).strip() if last else ""
     recovery = recovery.group(1).strip() if recovery else "Not Provided"
 
-    if last == "✖️":
-        last = ""
 
-    name = f"{first} {last}".strip()
+    name = first_name.strip()
+    
 
     # 🔥 Markdown SAFE
     return (
