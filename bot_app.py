@@ -3356,174 +3356,136 @@ async def _request_userbot_job(job_type: str, user_id: int, payload: dict | None
 # =========================
 # REGISTER (THIS MUST BE ASYNC)
 # =========================
-async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):  
-    
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from telegram.helpers import escape_markdown
+    import sqlite3, asyncio, time
 
-    user = update.effective_user  
+    user = update.effective_user
 
-    # 🔥 STEP 1: USERBOT KO TASK FETCH KARNE BOLO  
+    # 🔥 USERBOT KO FETCH JOB DO
     await _request_userbot_job("fetch", user.id)
+    await update.message.reply_text("⏳ Fetching task... Please wait")
 
-    await update.message.reply_text("⏳ Fetching task... Please wait")  
-
-    # 🔥 STEP 2: DB SE TASK LO  
+    # 🔥 DB SE DIRECT STRUCTURED DATA LO
     def get_task(user_id):
         con = sqlite3.connect("userbot.db")
         con.row_factory = sqlite3.Row
         cur = con.cursor()
 
         cur.execute("""
-        SELECT * FROM tasks
+        SELECT first_name, last_name, email, password, recovery_email, task_id, msg_id
+        FROM tasks
         WHERE user_id=?
         ORDER BY id DESC LIMIT 1
         """, (user_id,))
 
         row = cur.fetchone()
         con.close()
-
         return dict(row) if row else None
 
     task_data = None
 
-    for _ in range(15):  
+    for _ in range(15):
         task_data = get_task(user.id)
-
-        if task_data and task_data.get("task_text"):
+        if task_data and task_data.get("email"):
             break
-
         await asyncio.sleep(1)
 
-    if not task_data:  
-        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")  
-        return  
+    if not task_data:
+        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")
+        return
 
-    task_text = task_data.get("task_text", "")  
-    task_id = task_data.get("task_id")  
-    msg_id = task_data.get("msg_id")  
+    # 🔥 DIRECT VALUES
+    first_name = task_data.get("first_name", "")
+    last_name = task_data.get("last_name", "")
+    email = task_data.get("email")
+    password = task_data.get("password")
+    recovery_email = task_data.get("recovery_email") or "Not Provided"
 
-    # 🔥 DUPLICATE TASK CHECK  
-    last_task = context.user_data.get("last_task_id")  
+    task_id = task_data.get("task_id")
+    msg_id = task_data.get("msg_id")
 
-    if task_id == last_task:  
-        await update.message.reply_text("⚠️ Same task aa gaya, retry kar rahe hain...")  
-        return await register(update, context)  
+    # 🔥 DUPLICATE CHECK
+    if task_id == context.user_data.get("last_task_id"):
+        await update.message.reply_text("⚠️ Same task aa gaya, retry...")
+        return await register(update, context)
 
-    context.user_data["last_task_id"] = task_id  
+    context.user_data["last_task_id"] = task_id
 
-    # 🔥 STEP 3: CLEAN PARSE  
-    email_match = re.search(r'Email:\s*([^\n]+)', task_text)  
-    password_match = re.search(r'Password:\s*([^\n]+)', task_text)  
-    first_match = re.search(r'First name:\s*([^\n]+)', task_text)  
-    last_match = re.search(r'Last name:\s*([^\n]+)', task_text)  
-    recovery_match = re.search(r'Recovery email\s*([^\s\n]+@gmail\.com)', task_text, re.IGNORECASE)  
-
-    email = email_match.group(1).strip() if email_match else None  
-    password = password_match.group(1).strip() if password_match else None  
-    first_name = first_match.group(1).strip() if first_match else ""  
-    last_name = last_match.group(1).strip() if last_match else ""  
-    recovery_email = recovery_match.group(1).strip() if recovery_match else None  
-
-    if last_name == "✖️":  
-        last_name = ""  
-
-    if not email or not password:  
-        await update.message.reply_text("❌ Invalid task data, retrying...")  
-        return await register(update, context)  
-
-    if not recovery_email:  
-        recovery_email = "Not Provided"  
-
-    name_raw = f"{first_name} {last_name}".strip()  
-    extra_data = "N/A"  
-
-    # 🔥 Markdown SAFE VALUES
+    # 🔥 Markdown Safe
+    name_raw = f"{first_name} {last_name}".strip()
     name = escape_markdown(name_raw, version=2)
     email_safe = escape_markdown(email, version=2)
     password_safe = escape_markdown(password, version=2)
     recovery_safe = escape_markdown(recovery_email, version=2)
 
-    # 🔥 TEMP STORE  
-    temp_data[user.id] = {  
-        "name": name_raw,  
-        "email": email,  
-        "password": password,  
-        "recovery_email": recovery_email,  
-        "extra": extra_data,  
-        "task_id": task_id,  
-        "msg_id": msg_id  
-    }  
+    # 🔥 TEMP STORE
+    temp_data[user.id] = {
+        "name": name_raw,
+        "email": email,
+        "password": password,
+        "recovery_email": recovery_email,
+        "task_id": task_id,
+        "msg_id": msg_id
+    }
 
-    # 🔥 STEP 4: DB SAVE  
-    now = int(time.time())  
-    con = db()  
-    cur = con.cursor()  
+    # 🔥 DB SAVE (MAIN BOT)
+    now = int(time.time())
+    con = db()
+    cur = con.cursor()
 
-    cur.execute("""  
-    INSERT OR IGNORE INTO registrations(  
-        user_id, first_name, last_name, email, password, recovery_email, extra_data, msg_id, created_at, state  
-    ) VALUES(?,?,?,?,?,?,?,?,?,?)  
-    """, (  
-        user.id,  
-        first_name,  
-        last_name,  
-        email,  
-        password,  
-        recovery_email,  
-        extra_data,  
-        msg_id,  
-        now,  
-        "created",  
-    ))  
+    cur.execute("""
+    INSERT INTO registrations(
+        user_id, first_name, last_name, email, password, recovery_email, created_at, state
+    ) VALUES(?,?,?,?,?,?,?,?)
+    """, (
+        user.id,
+        first_name,
+        last_name,
+        email,
+        password,
+        recovery_email,
+        now,
+        "created",
+    ))
 
-    if cur.rowcount == 0:  
-        await update.message.reply_text("⚠️ Duplicate task मिला, नया ला रहे हैं...")  
-        con.close()  
-        return await register(update, context)  
+    reg_id = cur.lastrowid
 
-    reg_id = cur.lastrowid  
+    expires_at = now + ACTION_TIMEOUT_HOURS * 3600
 
-    expires_at = now + ACTION_TIMEOUT_HOURS * 3600  
+    cur.execute("""
+    INSERT INTO actions(
+        user_id, reg_id, created_at, expires_at, state
+    ) VALUES(?,?,?,?,?)
+    """, (
+        user.id,
+        reg_id,
+        now,
+        expires_at,
+        "shown",
+    ))
 
-    cur.execute("""  
-    INSERT INTO actions(  
-        user_id, reg_id, created_at, expires_at, state  
-    ) VALUES(?,?,?,?,?)  
-    """, (  
-        user.id,  
-        reg_id,  
-        now,  
-        expires_at,  
-        "shown",  
-    ))  
+    action_id = cur.lastrowid
 
-    action_id = cur.lastrowid  
+    con.commit()
+    con.close()
 
-    con.commit()  
-    con.close()  
-# 🔥 STEP 5: MESSAGE
-
-    # ESCAPE
-    name = escape_markdown(name, version=2)
-    email = escape_markdown(email, version=2)
-    password = escape_markdown(password, version=2)
-    recovery_email = escape_markdown(recovery_email, version=2)
-
+    # 🔥 FINAL MESSAGE (Markdown SAFE)
     msg_text = (
         "Register account using the specified\n"
         "data and get from ₹20 to ₹22\n\n"
         f"Name: `{name}`\n\n"
-        f"Email: `{email}`\n\n"
-        f"Password: `{password}`\n\n"
+        f"Email: `{email_safe}`\n\n"
+        f"Password: `{password_safe}`\n\n"
         "🔐 Be sure to use the specified data,\n"
         "otherwise the account will not be paid\n"
         "=========================\n"
         "Age choose : 1990-2007\n"
         "=========================\n"
         "Gender : Your choice,\n"
-
         "\n________________________\n"
         "🚦 Recovery Email:\n"
-        f"`{recovery_email}`\n"
+        f"`{recovery_safe}`\n"
     )
 
     await update.message.reply_text(
@@ -3531,6 +3493,8 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="MarkdownV2",
         reply_markup=reg_buttons(action_id, task_id)
     )
+
+    
 # =========================
 # CALLBACKS
 # =========================
