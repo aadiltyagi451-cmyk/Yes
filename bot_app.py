@@ -3397,7 +3397,6 @@ async def _request_userbot_job(job_type: str, user_id: int, payload: dict | None
 # REGISTER (THIS MUST BE ASYNC)
 # =========================
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from telegram.helpers import escape_markdown
     import sqlite3, asyncio, time
 
     user = update.effective_user
@@ -3406,7 +3405,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _request_userbot_job("fetch", user.id)
     await update.message.reply_text("⏳ Fetching task... Please wait")
 
-    # 🔥 DB SE DIRECT STRUCTURED DATA LO
+    # 🔥 DB SE DIRECT DATA LO
     def get_task(user_id):
         con = sqlite3.connect(USERBOT_DB_PATH)
         con.row_factory = sqlite3.Row
@@ -3435,8 +3434,8 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")
         return
 
-    # 🔥 DIRECT VALUES
-    first_name = task_data.get("first_name", "")
+    # 🔥 VALUES
+    first_name = (task_data.get("first_name") or "").strip()
     email = task_data.get("email")
     password = task_data.get("password")
     recovery_email = task_data.get("recovery_email") or "Not Provided"
@@ -3451,16 +3450,9 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["last_task_id"] = task_id
 
-    # 🔥 Markdown Safe
-    name_raw = first_name.strip()
-
-    name = escape_markdown(name_raw, version=2)
-    email_safe = escape_markdown(email, version=2)
-    password_safe = escape_markdown(password, version=2)
-    recovery_safe = escape_markdown(recovery_email, version=2)
     # 🔥 TEMP STORE
     temp_data[user.id] = {
-        "name": name_raw,
+        "name": first_name,
         "email": email,
         "password": password,
         "recovery_email": recovery_email,
@@ -3508,29 +3500,25 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     con.commit()
     con.close()
 
-    # 🔥 FINAL MESSAGE (Markdown SAFE)
-    msg_text = (
+    # 🔥 FINAL MESSAGE (NO ERROR)
+    await update.message.reply_text(
         "Register account using the specified\n"
         "data and get from ₹20 to ₹22\n\n"
-        f"Name: `{name}`\n\n"
-        f"Email: `{email_safe}`\n\n"
-        f"Password: `{password_safe}`\n\n"
+        f"Name: `{first_name}`\n\n"
+        f"Email: `{email}`\n\n"
+        f"Password: `{password}`\n\n"
         "🔐 Be sure to use the specified data,\n"
         "otherwise the account will not be paid\n"
-        "=========================\n"
+        "-------------------------\n"
         "Age choose : 1990-2007\n"
-        "=========================\n"
+        "-------------------------\n"
         "Gender : Your choice,\n"
         "\n________________________\n"
         "🚦 Recovery Email:\n"
-        f"`{recovery_safe}`\n"
-    )
-
-    await update.message.reply_text(
-        msg_text,
-        parse_mode="MarkdownV2",
+        f"`{recovery_email}`\n",
+        parse_mode="Markdown",   # 🔥 IMPORTANT FIX
         reply_markup=reg_buttons(action_id, task_id)
-    )
+)
 
     
 # =========================
