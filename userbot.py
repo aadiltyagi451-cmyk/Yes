@@ -11,7 +11,7 @@ from telegram.helpers import escape_markdown
 api_id = 36180474
 api_hash = "1f4ecc2133837a8a3c307f676cb95f88"
 SOURCE = "@GmailFarmerBot"
-DB_PATH = "userbot.db"
+DB_PATH = "userboot.db"
 
 SESSION_STRINGS = [
     (os.getenv("SESSION1") or "").strip(),
