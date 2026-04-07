@@ -5,13 +5,12 @@ import sqlite3
 import re
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telegram.helpers import escape_markdown
 
 # ========= CONFIG =========
 api_id = 36180474
 api_hash = "1f4ecc2133837a8a3c307f676cb95f88"
 SOURCE = "@GmailFarmerBot"
-DB_PATH = "userboot.db"
+DB_PATH = "userbot.db"
 
 SESSION_STRINGS = [
     (os.getenv("SESSION1") or "").strip(),
@@ -47,11 +46,10 @@ def init_db():
     CREATE TABLE IF NOT EXISTS tasks(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
-
         task_text TEXT,
 
         first_name TEXT,
-        last_name Text,
+        last_name TEXT,
         email TEXT,
         password TEXT,
         recovery_email TEXT,
@@ -103,8 +101,7 @@ async def click_button(msg, keywords):
         return False
     for row in msg.buttons:
         for btn in row:
-            txt = (btn.text or "").lower()
-            if any(k in txt for k in keywords):
+            if any(k in (btn.text or "").lower() for k in keywords):
                 await msg.click(text=btn.text)
                 return True
     return False
@@ -134,17 +131,10 @@ def parse_task(text):
     last = last.group(1).strip() if last else ""
     recovery = recovery.group(1).strip() if recovery else "Not Provided"
 
+    if last == "✖️":
+        last = ""
 
-    name = f"{first} {last}".strip()
-    
-
-    # 🔥 Markdown SAFE
-    return (
-        escape_markdown(name, version=2),
-        escape_markdown(email, version=2),
-        escape_markdown(password, version=2),
-        escape_markdown(recovery, version=2),
-    )
+    return first, last, email, password, recovery
 
 # ========= FETCH TASK =========
 async def fetch_task(user_id):
@@ -181,7 +171,7 @@ async def fetch_task(user_id):
         final = await client.get_messages(SOURCE, ids=msg_id)
         text = final.text or ""
 
-        name, email, password, recovery = parse_task(text)
+        first, last, email, password, recovery = parse_task(text)
 
         task_id = f"{user_id}_{msg_id}"
 
@@ -191,14 +181,15 @@ async def fetch_task(user_id):
         cur.execute("""
         INSERT INTO tasks(
             user_id, task_text,
-            name, email, password, recovery,
+            first_name, last_name, email, password, recovery_email,
             task_id, msg_id, status, created_at
         )
-        VALUES(?,?,?,?,?,?,?,?,?,?)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
         """, (
             int(user_id),
             text,
-            name,
+            first,
+            last,
             email,
             password,
             recovery,
@@ -261,55 +252,23 @@ def save_result(user_id, task_id, status):
     con.commit()
     con.close()
 
-# ========= JOB WORKER =========
-def _claim_next_job_sync():
-    con = db()
-    cur = con.cursor()
-
-    cur.execute("""
-    SELECT * FROM jobs
-    WHERE status='pending'
-    ORDER BY id ASC LIMIT 1
-    """)
-
-    job = cur.fetchone()
-    if not job:
-        con.close()
-        return None
-
-    cur.execute("""
-    UPDATE jobs SET status='processing', updated_at=?
-    WHERE id=? AND status='pending'
-    """, (int(time.time()), int(job["id"])))
-
-    if cur.rowcount != 1:
-        con.commit()
-        con.close()
-        return None
-
-    con.commit()
-    con.close()
-    return dict(job)
-
-def _finish_job_sync(job_id, status, error=""):
-    con = db()
-    cur = con.cursor()
-
-    cur.execute("""
-    UPDATE jobs SET status=?, updated_at=?, error=?
-    WHERE id=?
-    """, (status, int(time.time()), error, int(job_id)))
-
-    con.commit()
-    con.close()
-
+# ========= JOB LOOP =========
 async def _job_loop():
     while True:
-        job = await asyncio.to_thread(_claim_next_job_sync)
+        con = db()
+        cur = con.cursor()
+
+        cur.execute("SELECT * FROM jobs WHERE status='pending' LIMIT 1")
+        job = cur.fetchone()
 
         if not job:
+            con.close()
             await asyncio.sleep(1)
             continue
+
+        cur.execute("UPDATE jobs SET status='processing' WHERE id=?", (job["id"],))
+        con.commit()
+        con.close()
 
         try:
             if job["job_type"] == "fetch":
@@ -317,15 +276,18 @@ async def _job_loop():
             elif job["job_type"] == "confirm":
                 await confirm_task(job["user_id"])
 
-            await asyncio.to_thread(_finish_job_sync, job["id"], "done")
+            con = db()
+            cur = con.cursor()
+            cur.execute("UPDATE jobs SET status='done' WHERE id=?", (job["id"],))
+            con.commit()
+            con.close()
 
         except Exception as e:
-            print("[USERBOT] ❌ job failed:", repr(e))
-            await asyncio.to_thread(_finish_job_sync, job["id"], "failed", str(e))
+            print("[USERBOT] ❌", e)
 
 # ========= START =========
 async def start_userbot():
-    global _started, _job_task
+    global _started
 
     if _started:
         return
@@ -337,14 +299,12 @@ async def start_userbot():
         try:
             print(f"[USERBOT] Connecting {i}")
             await c.connect()
-            if not await c.is_user_authorized():
-                print(f"[USERBOT] ❌ Not authorized {i}")
-                continue
-            print(f"[USERBOT] ✅ READY {i}")
+            if await c.is_user_authorized():
+                print(f"[USERBOT] ✅ READY {i}")
         except Exception as e:
             print(e)
 
-    _job_task = asyncio.create_task(_job_loop())
+    asyncio.create_task(_job_loop())
     print("[USERBOT] ✅ Worker started")
 
     await asyncio.Event().wait()
