@@ -3311,7 +3311,7 @@ def strong_password(length=None):
 # =========================
 def _queue_userbot_job(job_type: str, user_id: int, payload: dict | None = None) -> int:
     """Write a job into userbot.db so the separate userbot.py process can pick it up."""
-    con = sqlite3.connect("userbot.db", timeout=10, check_same_thread=False)
+    con = sqlite3.connect("userboot.db", timeout=10, check_same_thread=False)
     con.row_factory = sqlite3.Row
     try:
         cur = con.cursor()
@@ -3368,7 +3368,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🔥 DB SE DIRECT STRUCTURED DATA LO
     def get_task(user_id):
-        con = sqlite3.connect("userbot.db")
+        con = sqlite3.connect("userboot.db")
         con.row_factory = sqlite3.Row
         cur = con.cursor()
 
