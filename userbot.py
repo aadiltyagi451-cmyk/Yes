@@ -10,7 +10,7 @@ from telethon.sessions import StringSession
 api_id = 36180474
 api_hash = "1f4ecc2133837a8a3c307f676cb95f88"
 SOURCE = "@GmailFarmerBot"
-DB_PATH = "userboot.db"
+DB_PATH = "bot.db"
 
 SESSION_STRINGS = [
     (os.getenv("SESSION1") or "").strip(),
