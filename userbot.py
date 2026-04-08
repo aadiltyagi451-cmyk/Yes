@@ -10,27 +10,14 @@ from telethon.sessions import StringSession
 api_id = 36180474
 api_hash = "1f4ecc2133837a8a3c307f676cb95f88"
 SOURCE = "@GmailFarmerBot"
-DB_PATH = (os.getenv("DB_PATH") or os.getenv("USERBOT_DB_PATH") or "bot.db").strip()
+DB_PATH = "bot.db"
 
 SESSION_STRINGS = [
     (os.getenv("SESSION1") or "").strip(),
-    (os.getenv("SESSION2") or "").strip(),
 ]
-SESSION_STRINGS = [s for s in SESSION_STRINGS if s]
 
-clients = []
-locks = []
-
-for s in SESSION_STRINGS:
-    try:
-        clients.append(TelegramClient(StringSession(s), api_id, api_hash))
-        locks.append(asyncio.Lock())
-    except Exception as e:
-        print(f"[USERBOT] ⚠️ Failed to init client: {repr(e)}")
-
-client_index = 0
-_started = False
-_job_task = None
+clients = [TelegramClient(StringSession(s), api_id, api_hash) for s in SESSION_STRINGS if s]
+locks = [asyncio.Lock() for _ in clients]
 
 # ========= DB =========
 def db():
@@ -43,61 +30,40 @@ def init_db():
     cur = con.cursor()
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS tasks(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        task_text TEXT,
-
-        first_name TEXT,
-        last_name TEXT,
-        email TEXT,
-        password TEXT,
-        recovery_email TEXT,
-
-        task_id TEXT,
-        msg_id INTEGER,
-        status TEXT,
-        created_at INTEGER
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS results(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        task_id TEXT,
-        status TEXT,
-        created_at INTEGER
-    )
-    """)
-
-    cur.execute("""
     CREATE TABLE IF NOT EXISTS jobs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        job_type TEXT NOT NULL,
-        payload TEXT DEFAULT '',
-        status TEXT DEFAULT 'pending',
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER,
-        error TEXT DEFAULT ''
+        user_id INTEGER,
+        job_type TEXT,
+        status TEXT DEFAULT 'pending'
     )
     """)
 
     con.commit()
     con.close()
 
-# ========= HELPERS =========
-def get_client():
-    global client_index
-    if not clients:
-        return None, None
-    i = client_index % len(clients)
-    client_index += 1
-    return i, clients[i]
+# ========= PARSER =========
+def parse_task(text):
+    first = re.search(r'First name:\s*([^\n]+)', text)
+    last = re.search(r'Last name:\s*([^\n]+)', text)
+    email = re.search(r'Email:\s*([^\n]+)', text)
+    password = re.search(r'Password:\s*([^\n]+)', text)
 
+    recovery = re.search(r'([a-zA-Z0-9._%+-]+@gmail\.com)', text)
+
+    first = first.group(1).strip() if first else ""
+    last = last.group(1).strip() if last else ""
+    email = email.group(1).strip() if email else ""
+    password = password.group(1).strip() if password else ""
+    recovery = recovery.group(1).strip() if recovery else "Not Provided"
+
+    if last == "✖️":
+        last = ""
+
+    return first, last, email, password, recovery
+
+# ========= BUTTON HELPERS =========
 async def click_button(msg, keywords):
-    if not getattr(msg, "buttons", None):
+    if not msg.buttons:
         return False
     for row in msg.buttons:
         for btn in row:
@@ -109,7 +75,7 @@ async def click_button(msg, keywords):
 async def wait_for_button(client, msg_id, keywords, timeout=20):
     for _ in range(int(timeout * 2)):
         msg = await client.get_messages(SOURCE, ids=msg_id)
-        if getattr(msg, "buttons", None):
+        if msg.buttons:
             for row in msg.buttons:
                 for btn in row:
                     if any(k in (btn.text or "").lower() for k in keywords):
@@ -117,33 +83,18 @@ async def wait_for_button(client, msg_id, keywords, timeout=20):
         await asyncio.sleep(0.5)
     return None
 
-# ========= PARSE FUNCTION =========
-def parse_task(text):
-    email = re.search(r'Email:\s*([^\n]+)', text)
-    password = re.search(r'Password:\s*([^\n]+)', text)
-    first = re.search(r'First name:\s*([^\n]+)', text)
-    last = re.search(r'Last name:\s*([^\n]+)', text)
-    recovery = re.search(r'Recovery email\s*([^\s\n]+@gmail\.com)', text, re.IGNORECASE)
+# ========= CLIENT =========
+def get_client():
+    return clients[0] if clients else None
 
-    email = email.group(1).strip() if email else ""
-    password = password.group(1).strip() if password else ""
-    first = first.group(1).strip() if first else ""
-    last = last.group(1).strip() if last else ""
-    recovery = recovery.group(1).strip() if recovery else "Not Provided"
-
-    if last == "✖️":
-        last = ""
-
-    return first, last, email, password, recovery
-
-# ========= FETCH TASK =========
+# ========= FETCH =========
 async def fetch_task(user_id):
-    idx, client = get_client()
+    client = get_client()
     if client is None:
-        print("[USERBOT] ⚠️ No client available")
         return
 
-    async with locks[idx]:
+    async with locks[0]:
+
         await client.send_message(SOURCE, "➕ Register a new account")
         await asyncio.sleep(1)
 
@@ -154,14 +105,17 @@ async def fetch_task(user_id):
         msg = msgs[0]
         msg_id = msg.id
 
+        # 🔥 STEP 1: DONE
         msg = await wait_for_button(client, msg_id, ["done"])
         if not msg: return
         await click_button(msg, ["done"])
 
+        # 🔥 STEP 2: COMPLETE
         msg = await wait_for_button(client, msg_id, ["complete"])
         if not msg: return
         await click_button(msg, ["complete"])
 
+        # 🔥 STEP 3: CONFIRM
         msg = await wait_for_button(client, msg_id, ["confirm"])
         if not msg: return
         await click_button(msg, ["confirm"])
@@ -172,39 +126,53 @@ async def fetch_task(user_id):
         text = final.text or ""
 
         first, last, email, password, recovery = parse_task(text)
-
-        task_id = f"{user_id}_{msg_id}"
+        name = (first + " " + last).strip()
 
         con = db()
         cur = con.cursor()
 
+        now = int(time.time())
+
         cur.execute("""
-        INSERT INTO tasks(
-            user_id, task_text,
-            first_name, last_name, email, password, recovery_email,
-            task_id, msg_id, status, created_at
-        )
-        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        INSERT INTO registrations(
+            user_id, first_name, email, password, recovery_email,
+            created_at, state, status, task_id, msg_id
+        ) VALUES(?,?,?,?,?,?,?,?,?,?)
         """, (
             int(user_id),
-            text,
-            first,
-            last,
+            name,
             email,
             password,
             recovery,
-            task_id,
-            int(msg_id),
+            now,
+            "created",
             "fetched",
-            int(time.time())
+            f"{user_id}_{msg_id}",
+            int(msg_id)
+        ))
+
+        reg_id = cur.lastrowid
+
+        cur.execute("""
+        INSERT INTO actions(
+            user_id, reg_id, created_at, expires_at, state
+        ) VALUES(?,?,?,?,?)
+        """, (
+            int(user_id),
+            reg_id,
+            now,
+            now + 20 * 3600,
+            "shown"
         ))
 
         con.commit()
         con.close()
 
+        print(f"✅ FETCH DONE {user_id}")
+
 # ========= CONFIRM =========
 async def confirm_task(user_id):
-    idx, client = get_client()
+    client = get_client()
     if client is None:
         return
 
@@ -212,48 +180,55 @@ async def confirm_task(user_id):
     cur = con.cursor()
 
     cur.execute("""
-    SELECT task_id, msg_id FROM tasks
+    SELECT id, msg_id FROM registrations
     WHERE user_id=?
     ORDER BY id DESC LIMIT 1
-    """, (int(user_id),))
+    """, (user_id,))
 
     row = cur.fetchone()
     con.close()
+
     if not row:
         return
 
-    task_id, msg_id = row["task_id"], row["msg_id"]
+    reg_id = row["id"]
+    msg_id = row["msg_id"]
 
-    async with locks[idx]:
-        msg = await client.get_messages(SOURCE, ids=int(msg_id))
+    async with locks[0]:
+
+        msg = await client.get_messages(SOURCE, ids=msg_id)
         await click_button(msg, ["done", "✓"])
 
         for _ in range(30):
             await asyncio.sleep(1)
-            updated = await client.get_messages(SOURCE, ids=int(msg_id))
+
+            updated = await client.get_messages(SOURCE, ids=msg_id)
             text = (updated.text or "").lower()
 
             if "done" in text:
-                save_result(user_id, task_id, "success")
-                return
-            if "try again" in text:
-                save_result(user_id, task_id, "fail")
+                update_status(reg_id, "success")
                 return
 
-def save_result(user_id, task_id, status):
+            if "try again" in text:
+                update_status(reg_id, "fail")
+                return
+
+# ========= UPDATE =========
+def update_status(reg_id, status):
     con = db()
     cur = con.cursor()
 
     cur.execute("""
-    INSERT INTO results(user_id, task_id, status, created_at)
-    VALUES(?,?,?,?)
-    """, (int(user_id), str(task_id), str(status), int(time.time())))
+    UPDATE registrations
+    SET status=?
+    WHERE id=?
+    """, (status, reg_id))
 
     con.commit()
     con.close()
 
 # ========= JOB LOOP =========
-async def _job_loop():
+async def job_loop():
     while True:
         con = db()
         cur = con.cursor()
@@ -266,48 +241,32 @@ async def _job_loop():
             await asyncio.sleep(1)
             continue
 
-        cur.execute("UPDATE jobs SET status='processing' WHERE id=?", (job["id"],))
+        cur.execute("UPDATE jobs SET status='done' WHERE id=?", (job["id"],))
         con.commit()
         con.close()
 
         try:
             if job["job_type"] == "fetch":
                 await fetch_task(job["user_id"])
+
             elif job["job_type"] == "confirm":
                 await confirm_task(job["user_id"])
 
-            con = db()
-            cur = con.cursor()
-            cur.execute("UPDATE jobs SET status='done' WHERE id=?", (job["id"],))
-            con.commit()
-            con.close()
-
         except Exception as e:
-            print("[USERBOT] ❌", e)
+            print("❌ ERROR:", e)
 
 # ========= START =========
-async def start_userbot():
-    global _started
-
-    if _started:
-        return
-    _started = True
-
+async def main():
     init_db()
 
-    for i, c in enumerate(clients):
-        try:
-            print(f"[USERBOT] Connecting {i}")
-            await c.connect()
-            if await c.is_user_authorized():
-                print(f"[USERBOT] ✅ READY {i}")
-        except Exception as e:
-            print(e)
+    for c in clients:
+        await c.start()
+        print("✅ Userbot connected")
 
-    asyncio.create_task(_job_loop())
-    print("[USERBOT] ✅ Worker started")
+    asyncio.create_task(job_loop())
+    print("🚀 Userbot running")
 
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    asyncio.run(start_userbot())
+    asyncio.run(main())
