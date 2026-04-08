@@ -13,8 +13,8 @@ SOURCE = "@GmailFarmerBot"
 DB_PATH = "bot.db"
 
 SESSION_STRINGS = [
-    (os.getenv("SESSION1") or "").strip(),
-    (os.getenv("SESSION2") or "").strip(),
+    (os.getenv("SESSION5") or "").strip(),
+    (os.getenv("SESSION6") or "").strip(),
 ]
 SESSION_STRINGS = [s for s in SESSION_STRINGS if s]
 
