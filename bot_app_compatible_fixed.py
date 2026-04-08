@@ -3380,7 +3380,6 @@ async def _request_userbot_job(job_type: str, user_id: int, payload: dict | None
 # REGISTER (THIS MUST BE ASYNC)
 # =========================
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    import html as html_pkg
     import sqlite3, asyncio, time
 
     user = update.effective_user
@@ -3450,27 +3449,25 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "msg_id": msg_id,
     }
 
-    name_safe = html_pkg.escape(name_raw)
-    email_safe = html_pkg.escape(email)
-    password_safe = html_pkg.escape(password)
-    recovery_safe = html_pkg.escape(recovery_email)
+    name = safe_md(name_raw)
+    email = safe_md(email)
+    password = safe_md(password)
+    recovery_email = safe_md(recovery_email)
 
     msg_text = (
-        "Register account using the specified\n"
-        "data and get from ₹0.145$ to ₹0.17$\n\n"
-        f"First name: <code>{name_safe}</code>\n"
-        f"Last name: <code>{html_pkg.escape(last_name or '✖️')}</code>\n"
-        f"Email: <code>{email_safe}</code>\n"
-        f"Password: <code>{password_safe}</code>\n\n"
+        "Register account using the specified data and get from ₹20 to ₹22$\n\n"
+        f"First name: `{name}`\n"
+        f"Last name: ✖️\n"
+        f"Email: `{email}`\n"
+        f"Password: `{password}`\n\n"
         "🔐 Be sure to use the specified data, otherwise the account will not be paid.\n"
         "______________________________\n\n"
-        "🚦 You need to add Recovery email  "
-        f"<code>{recovery_safe}</code>"
+        f"🚦 You need to add Recovery email  `{recovery_email}`"
     )
 
     await update.message.reply_text(
         msg_text,
-        parse_mode="HTML",
+        parse_mode="Markdown",
         reply_markup=reg_buttons(action_id, task_id),
     )
 # =========================
