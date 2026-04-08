@@ -3360,12 +3360,10 @@ async def _request_userbot_job(job_type: str, user_id: int, payload: dict | None
 # REGISTER (THIS MUST BE ASYNC)
 # =========================
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    import html as html_pkg
     import sqlite3, asyncio, time
 
     user = update.effective_user
 
-    # Ask the separate userbot worker to fetch the source bot message
     await _request_userbot_job("fetch", user.id)
     await update.message.reply_text("⏳ Fetching task... Please wait")
 
@@ -3411,10 +3409,12 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     email = (task_data.get("email") or "").strip()
     password = (task_data.get("password") or "").strip()
     recovery_email = (task_data.get("recovery_email") or "Not Provided").strip()
+
     task_id = task_data.get("task_id") or f"{user.id}_{task_data.get('reg_id')}"
     msg_id = task_data.get("msg_id")
     action_id = task_data.get("action_id")
 
+    # ✅ FIXED INDENT
     if task_id == context.user_data.get("last_task_id"):
         await update.message.reply_text("⚠️ Same task aa gaya, retry...")
         return await register(update, context)
@@ -3430,24 +3430,25 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "msg_id": msg_id,
     }
 
-    name = safe_md(name)
-email = safe_md(email)
-password = safe_md(password)
-recovery_email = safe_md(recovery_email)
+    # ✅ SAFE MARKDOWN
+    def safe_md(text):
+        return str(text).replace("`", "'") if text else ""
 
-msg_text = (
-    "Register account using the specified data and get from ₹20 to ₹22$\n\n"
+    name = safe_md(name_raw)
+    email = safe_md(email)
+    password = safe_md(password)
+    recovery_email = safe_md(recovery_email)
 
-    f"First name: `{name}`\n"
-    f"Last name: ✖️\n"
-    f"Email: `{email}`\n"
-    f"Password: `{password}`\n\n"
-
-    "🔐 Be sure to use the specified data, otherwise the account will not be paid.\n"
-    "______________________________\n\n"
-
-    f"🚦 You need to add Recovery email  `{recovery_email}`"
-)
+    msg_text = (
+        "Register account using the specified data and get from ₹20 to ₹22$\n\n"
+        f"First name: `{name}`\n"
+        f"Last name: ✖️\n"
+        f"Email: `{email}`\n"
+        f"Password: `{password}`\n\n"
+        "🔐 Be sure to use the specified data, otherwise the account will not be paid.\n"
+        "______________________________\n\n"
+        f"🚦 You need to add Recovery email  `{recovery_email}`"
+    )
 
     await update.message.reply_text(
         msg_text,
