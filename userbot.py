@@ -34,6 +34,71 @@ def db():
     con.row_factory = sqlite3.Row
     return con
 
+def init_db():
+    con = db()
+    cur = con.cursor()
+
+    # TASKS
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS tasks(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        task_text TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        email TEXT,
+        password TEXT,
+        recovery_email TEXT,
+        task_id TEXT,
+        msg_id INTEGER,
+        status TEXT,
+        created_at INTEGER
+    )
+    """)
+
+    # RESULTS
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS results(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        task_id TEXT,
+        status TEXT,
+        created_at INTEGER
+    )
+    """)
+
+    # JOBS
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS jobs(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        job_type TEXT,
+        payload TEXT DEFAULT '',
+        status TEXT DEFAULT 'pending',
+        created_at INTEGER,
+        updated_at INTEGER,
+        error TEXT DEFAULT ''
+    )
+    """)
+
+    # 🔥 AUTO FIX OLD DB
+    cur.execute("PRAGMA table_info(jobs)")
+    cols = {row[1] for row in cur.fetchall()}
+
+    for col, ddl in [
+        ("payload", "ALTER TABLE jobs ADD COLUMN payload TEXT DEFAULT ''"),
+        ("updated_at", "ALTER TABLE jobs ADD COLUMN updated_at INTEGER"),
+        ("error", "ALTER TABLE jobs ADD COLUMN error TEXT DEFAULT ''"),
+    ]:
+        if col not in cols:
+            try:
+                cur.execute(ddl)
+            except:
+                pass
+
+    con.commit()
+    con.close()
+
 # ========= CLIENT =========
 def get_client():
     global client_index
@@ -54,7 +119,7 @@ async def click_button(msg, keywords):
 
 # ========= WAIT TEXT =========
 async def wait_for_final_text(client, msg_id):
-    for _ in range(40):  # 20 sec wait
+    for _ in range(40):
         msg = await client.get_messages(SOURCE, ids=msg_id)
         text = msg.text or ""
 
@@ -87,37 +152,34 @@ async def fetch_task(user_id):
 
     async with locks[idx]:
         try:
-            print("[USERBOT] Sending request...")
+            print("[USERBOT] 🔄 Fetching task...")
+
             await client.send_message(SOURCE, "➕ Register a new account")
             await asyncio.sleep(2)
 
             msg = (await client.get_messages(SOURCE, limit=1))[0]
             msg_id = msg.id
 
-            # click flow
             await asyncio.sleep(1)
             await click_button(msg, ["done"])
-            await asyncio.sleep(1)
 
+            await asyncio.sleep(1)
             msg = await client.get_messages(SOURCE, ids=msg_id)
             await click_button(msg, ["complete"])
-            await asyncio.sleep(1)
 
+            await asyncio.sleep(1)
             msg = await client.get_messages(SOURCE, ids=msg_id)
             await click_button(msg, ["confirm"])
 
-            # wait final text
             text = await wait_for_final_text(client, msg_id)
 
             if not text:
                 print("[USERBOT] ❌ No final text")
                 return
 
-            print("[USERBOT] ✅ Text received")
-
             first, last, email, password, recovery = parse_task(text)
 
-            if not email or not password:
+            if not email:
                 print("[USERBOT] ❌ Parse failed")
                 return
 
@@ -150,7 +212,7 @@ async def fetch_task(user_id):
             con.commit()
             con.close()
 
-            print("[USERBOT] 💾 Saved to DB")
+            print("[USERBOT] ✅ Saved to DB")
 
         except Exception as e:
             print("[USERBOT ERROR]", e)
@@ -158,22 +220,29 @@ async def fetch_task(user_id):
 # ========= JOB LOOP =========
 async def job_loop():
     while True:
-        con = db()
-        cur = con.cursor()
-
-        cur.execute("SELECT * FROM jobs WHERE status='pending' LIMIT 1")
-        job = cur.fetchone()
-
-        if not job:
-            con.close()
-            await asyncio.sleep(1)
-            continue
-
-        cur.execute("UPDATE jobs SET status='processing' WHERE id=?", (job["id"],))
-        con.commit()
-        con.close()
-
         try:
+            con = db()
+            cur = con.cursor()
+
+            try:
+                cur.execute("SELECT * FROM jobs WHERE status='pending' LIMIT 1")
+            except Exception as e:
+                print("[USERBOT] DB ERROR:", e)
+                con.close()
+                await asyncio.sleep(2)
+                continue
+
+            job = cur.fetchone()
+
+            if not job:
+                con.close()
+                await asyncio.sleep(1)
+                continue
+
+            cur.execute("UPDATE jobs SET status='processing' WHERE id=?", (job["id"],))
+            con.commit()
+            con.close()
+
             if job["job_type"] == "fetch":
                 await fetch_task(job["user_id"])
 
@@ -184,10 +253,14 @@ async def job_loop():
             con.close()
 
         except Exception as e:
-            print("[JOB ERROR]", e)
+            print("[JOB LOOP ERROR]", e)
+            await asyncio.sleep(2)
 
 # ========= START =========
 async def main():
+    print("[USERBOT] 🔧 Initializing DB...")
+    init_db()
+
     for i, c in enumerate(clients):
         await c.connect()
         print(f"[USERBOT] ✅ Client {i} ready")
