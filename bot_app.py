@@ -3379,97 +3379,158 @@ async def _request_userbot_job(job_type: str, user_id: int, payload: dict | None
 # =========================
 # REGISTER (THIS MUST BE ASYNC)
 # =========================
+# =========================
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import sqlite3, asyncio, time
 
     user = update.effective_user
 
-    # Ask the separate userbot worker to fetch the source bot message
+    # 🔥 USERBOT KO FETCH JOB DO
     await _request_userbot_job("fetch", user.id)
     await update.message.reply_text("⏳ Fetching task... Please wait")
 
-    def get_task(user_id):
-        con = sqlite3.connect(DB)
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-        cur.execute("""
-        SELECT r.id AS reg_id,
-               r.user_id,
-               r.first_name,
-               r.last_name,
-               r.email,
-               r.password,
-               r.recovery_email,
-               r.task_id,
-               r.msg_id,
-               a.action_id
-        FROM registrations r
-        LEFT JOIN actions a ON a.reg_id = r.id
-        WHERE r.user_id=?
-        ORDER BY r.id DESC
+    # =========================
+    # GET TASK FROM DB (tasks table)
+    # =========================
+    def get_task(user_id):  
+        con = sqlite3.connect(DB)  
+        con.row_factory = sqlite3.Row  
+        cur = con.cursor()  
+        cur.execute("""  
+        SELECT 
+            id,
+            user_id,
+            first_name,
+            last_name,
+            email,
+            password,
+            recovery_email,
+            task_id,
+            msg_id
+        FROM tasks
+        WHERE user_id=?
+        ORDER BY id DESC
         LIMIT 1
-        """, (user_id,))
-        row = cur.fetchone()
-        con.close()
-        return dict(row) if row else None
+        """, (user_id,))  
+        row = cur.fetchone()  
+        con.close()  
+        return dict(row) if row else None  
 
-    task_data = None
-    for _ in range(15):
-        task_data = get_task(user.id)
-        if task_data and task_data.get("email") and task_data.get("action_id"):
-            break
-        await asyncio.sleep(1)
+    task_data = None  
+    for _ in range(20):  
+        task_data = get_task(user.id)  
+        if task_data and task_data.get("email"):  
+            break  
+        await asyncio.sleep(1)  
 
-    if not task_data:
-        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")
-        return
+    if not task_data:  
+        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")  
+        return  
 
-    first_name = (task_data.get("first_name") or "").strip()
-    last_name = (task_data.get("last_name") or "").strip()
-    name_raw = (f"{first_name} {last_name}").strip()
-    email = (task_data.get("email") or "").strip()
-    password = (task_data.get("password") or "").strip()
-    recovery_email = (task_data.get("recovery_email") or "Not Provided").strip()
-    task_id = task_data.get("task_id") or f"{user.id}_{task_data.get('reg_id')}"
-    msg_id = task_data.get("msg_id")
-    action_id = task_data.get("action_id")
+    # =========================
+    # INSERT INTO registrations + actions
+    # =========================
+    now = int(time.time())
+    con = db()
+    cur = con.cursor()
 
-    if task_id == context.user_data.get("last_task_id"):
-        await update.message.reply_text("⚠️ Same task aa gaya, retry...")
-        return await register(update, context)
+    cur.execute("""
+    INSERT INTO registrations(
+        user_id, first_name, last_name, email, password, recovery_email, created_at, state
+    ) VALUES(?,?,?,?,?,?,?,?)
+    """, (
+        user.id,
+        task_data.get("first_name"),
+        task_data.get("last_name"),
+        task_data.get("email"),
+        task_data.get("password"),
+        task_data.get("recovery_email"),
+        now,
+        "created",
+    ))
 
-    context.user_data["last_task_id"] = task_id
+    reg_id = cur.lastrowid
 
-    temp_data[user.id] = {
-        "name": name_raw,
-        "email": email,
-        "password": password,
-        "recovery_email": recovery_email,
-        "task_id": task_id,
-        "msg_id": msg_id,
-    }
+    expires_at = now + ACTION_TIMEOUT_HOURS * 3600
 
-    name = safe_md(name_raw)
-    email = safe_md(email)
-    password = safe_md(password)
-    recovery_email = safe_md(recovery_email)
+    cur.execute("""
+    INSERT INTO actions(
+        user_id, reg_id, created_at, expires_at, state
+    ) VALUES(?,?,?,?,?)
+    """, (
+        user.id,
+        reg_id,
+        now,
+        expires_at,
+        "shown",
+    ))
 
-    msg_text = (
-        "Register account using the specified data and get from ₹20 to ₹22$\n\n"
-        f"First name: `{name}`\n"
-        f"Last name: ✖️\n"
-        f"Email: `{email}`\n"
-        f"Password: `{password}`\n\n"
-        "🔐 Be sure to use the specified data, otherwise the account will not be paid.\n"
-        "______________________________\n\n"
-        f"🚦 You need to add Recovery email  `{recovery_email}`"
+    action_id = cur.lastrowid
+
+    con.commit()
+    con.close()
+
+    # =========================
+    # DATA PREPARE
+    # =========================
+    first_name = (task_data.get("first_name") or "").strip()  
+    last_name = (task_data.get("last_name") or "").strip()  
+    name_raw = (f"{first_name} {last_name}").strip()  
+    email = (task_data.get("email") or "").strip()  
+    password = (task_data.get("password") or "").strip()  
+    recovery_email = (task_data.get("recovery_email") or "Not Provided").strip()  
+    task_id = task_data.get("task_id")  
+    msg_id = task_data.get("msg_id")  
+
+    # =========================
+    # DUPLICATE CHECK
+    # =========================
+    if task_id == context.user_data.get("last_task_id"):  
+        await update.message.reply_text("⚠️ Same task aa gaya, retry...")  
+        return await register(update, context)  
+
+    context.user_data["last_task_id"] = task_id  
+
+    # =========================
+    # TEMP STORE
+    # =========================
+    temp_data[user.id] = {  
+        "name": name_raw,  
+        "email": email,  
+        "password": password,  
+        "recovery_email": recovery_email,  
+        "task_id": task_id,  
+        "msg_id": msg_id,  
+    }  
+
+    # =========================
+    # MARKDOWN SAFE
+    # =========================
+    name = safe_md(name_raw)  
+    email = safe_md(email)  
+    password = safe_md(password)  
+    recovery_email = safe_md(recovery_email)  
+
+    # =========================
+    # FINAL MESSAGE
+    # =========================
+    msg_text = (  
+        "Register account using the specified data and get from ₹20 to ₹22$\n\n"  
+        f"First name: `{name}`\n"  
+        f"Last name: ✖️\n"  
+        f"Email: `{email}`\n"  
+        f"Password: `{password}`\n\n"  
+        "🔐 Be sure to use the specified data, otherwise the account will not be paid.\n"  
+        "______________________________\n\n"  
+        f"🚦 You need to add Recovery email  `{recovery_email}`"  
+    )  
+
+    await update.message.reply_text(  
+        msg_text,  
+        parse_mode="Markdown",  
+        reply_markup=reg_buttons(action_id, task_id),  
     )
-
-    await update.message.reply_text(
-        msg_text,
-        parse_mode="Markdown",
-        reply_markup=reg_buttons(action_id, task_id),
-    )
+    
 # =========================
 # CALLBACKS
 # =========================
