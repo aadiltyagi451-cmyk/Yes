@@ -3376,9 +3376,17 @@ def _queue_userbot_job(job_type: str, user_id: int, payload: dict | None = None)
 async def _request_userbot_job(job_type: str, user_id: int, payload: dict | None = None) -> int:
     return await asyncio.to_thread(_queue_userbot_job, job_type, user_id, payload)
 
+
+
 # =========================
-# REGISTER (THIS MUST BE ASYNC)
+# SAFE FORMAT
 # =========================
+def _safe_code(s: str) -> str:
+    return (s or "").strip().replace("`", "'")
+
+
+# =========================
+# REGISTER
 # =========================
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import sqlite3, asyncio, time
@@ -3390,45 +3398,59 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏳ Fetching task... Please wait")
 
     # =========================
-    # GET TASK FROM DB (tasks table)
+    # TASK FETCH (FROM TASKS TABLE)
     # =========================
-    def get_task(user_id):  
-        con = sqlite3.connect(DB)  
-        con.row_factory = sqlite3.Row  
-        cur = con.cursor()  
-        cur.execute("""  
-        SELECT 
-            id,
-            user_id,
-            first_name,
-            last_name,
-            email,
-            password,
-            recovery_email,
-            task_id,
-            msg_id
-        FROM tasks
+    def get_task(user_id):
+        con = sqlite3.connect(DB)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+
+        cur.execute("""
+        SELECT * FROM tasks
         WHERE user_id=?
         ORDER BY id DESC
         LIMIT 1
-        """, (user_id,))  
-        row = cur.fetchone()  
-        con.close()  
-        return dict(row) if row else None  
+        """, (user_id,))
 
-    task_data = None  
-    for _ in range(20):  
-        task_data = get_task(user.id)  
-        if task_data and task_data.get("email"):  
-            break  
-        await asyncio.sleep(1)  
+        row = cur.fetchone()
+        con.close()
+        return dict(row) if row else None
 
-    if not task_data:  
-        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")  
-        return  
+    task_data = None
+
+    for _ in range(15):
+        task_data = get_task(user.id)
+        if task_data and task_data.get("email"):
+            break
+        await asyncio.sleep(1)
+
+    if not task_data:
+        await update.message.reply_text("❌ Server busy hai, 5 sec baad try karo")
+        return
 
     # =========================
-    # INSERT INTO registrations + actions
+    # DATA PREPARE
+    # =========================
+    first_name = (task_data.get("first_name") or "").strip()
+    last_name = (task_data.get("last_name") or "").strip()
+    name_raw = (f"{first_name} {last_name}").strip()
+    email = (task_data.get("email") or "").strip()
+    password = (task_data.get("password") or "").strip()
+    recovery_email = (task_data.get("recovery_email") or "Not Provided").strip()
+    task_id = task_data.get("task_id")
+    msg_id = task_data.get("msg_id")
+
+    # =========================
+    # DUPLICATE CHECK
+    # =========================
+    if task_id == context.user_data.get("last_task_id"):
+        await update.message.reply_text("⚠️ Same task aa gaya, retry...")
+        return await register(update, context)
+
+    context.user_data["last_task_id"] = task_id
+
+    # =========================
+    # SAVE INTO registrations + actions
     # =========================
     now = int(time.time())
     con = db()
@@ -3440,11 +3462,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ) VALUES(?,?,?,?,?,?,?,?)
     """, (
         user.id,
-        task_data.get("first_name"),
-        task_data.get("last_name"),
-        task_data.get("email"),
-        task_data.get("password"),
-        task_data.get("recovery_email"),
+        first_name,
+        last_name,
+        email,
+        password,
+        recovery_email,
         now,
         "created",
     ))
@@ -3471,77 +3493,44 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     con.close()
 
     # =========================
-    # DATA PREPARE
-    # =========================
-    first_name = (task_data.get("first_name") or "").strip()  
-    last_name = (task_data.get("last_name") or "").strip()  
-    name_raw = (f"{first_name} {last_name}").strip()  
-    email = (task_data.get("email") or "").strip()  
-    password = (task_data.get("password") or "").strip()  
-    recovery_email = (task_data.get("recovery_email") or "Not Provided").strip()  
-    task_id = task_data.get("task_id")  
-    msg_id = task_data.get("msg_id")  
-
-    # =========================
-    # DUPLICATE CHECK
-    # =========================
-    if task_id == context.user_data.get("last_task_id"):  
-        await update.message.reply_text("⚠️ Same task aa gaya, retry...")  
-        return await register(update, context)  
-
-    context.user_data["last_task_id"] = task_id  
-
-    # =========================
     # TEMP STORE
     # =========================
-    temp_data[user.id] = {  
-        "name": name_raw,  
-        "email": email,  
-        "password": password,  
-        "recovery_email": recovery_email,  
-        "task_id": task_id,  
-        "msg_id": msg_id,  
-    }  
+    temp_data[user.id] = {
+        "name": name_raw,
+        "email": email,
+        "password": password,
+        "recovery_email": recovery_email,
+        "task_id": task_id,
+        "msg_id": msg_id,
+    }
 
-    # Load registration from DB (so we can rebuild the original formatted text)
-            con = db()
-            cur = con.cursor()
-            cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
-            r = cur.fetchone()
-            con.close()
+    # =========================
+    # SAFE FORMAT
+    # =========================
+    name = _safe_code(name_raw)
+    email = _safe_code(email)
+    password = _safe_code(password)
+    recovery_email = _safe_code(recovery_email)
 
-            # Safety: avoid breaking Markdown if data contains backticks
-            def _safe_code(s: str) -> str:
-                s = (s or "").strip()
-                return s.replace("`", "'")
-
-            first_name = _safe_code(r["first_name"] if r else "")
-            last_name  = _safe_code(r["last_name"] if r else "")
-            name = (first_name + " " + last_name).strip()
-           
-            email = _safe_code(r["email"] if r else "")
-            password = _safe_code(r["password"] if r else "")
-            recovery_email = _safe_code(r["recovery_email"])
     # =========================
     # FINAL MESSAGE
     # =========================
-    msg_text = (  
-        "Register account using the specified data and get from ₹20 to ₹22$\n\n"  
-        f"First name: `{name}`\n"  
-        f"Last name: ✖️\n"  
-        f"Email: `{email}`\n"  
-        f"Password: `{password}`\n\n"  
-        "🔐 Be sure to use the specified data, otherwise the account will not be paid.\n"  
-        "______________________________\n\n"  
-        f"🚦 You need to add Recovery email  `{recovery_email}`"  
-    )  
-
-    await update.message.reply_text(  
-        msg_text,  
-        parse_mode="Markdown",  
-        reply_markup=reg_buttons(action_id, task_id),  
+    msg_text = (
+        "Register account using the specified data and get from ₹20 to ₹22$\n\n"
+        f"First name: `{name}`\n"
+        f"Last name: ✖️\n"
+        f"Email: `{email}`\n"
+        f"Password: `{password}`\n\n"
+        "🔐 Be sure to use the specified data, otherwise the account will not be paid.\n"
+        "______________________________\n\n"
+        f"🚦 You need to add Recovery email  `{recovery_email}`"
     )
-    
+
+    await update.message.reply_text(
+        msg_text,
+        parse_mode="Markdown",
+        reply_markup=reg_buttons(action_id, task_id),
+    )
 # =========================
 # CALLBACKS
 # =========================
