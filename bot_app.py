@@ -3503,14 +3503,25 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "msg_id": msg_id,  
     }  
 
-    # =========================
-    # MARKDOWN SAFE
-    # =========================
-    name = safe_md(name_raw)  
-    email = safe_md(email)  
-    password = safe_md(password)  
-    recovery_email = safe_md(recovery_email)  
+    # Load registration from DB (so we can rebuild the original formatted text)
+            con = db()
+            cur = con.cursor()
+            cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
+            r = cur.fetchone()
+            con.close()
 
+            # Safety: avoid breaking Markdown if data contains backticks
+            def _safe_code(s: str) -> str:
+                s = (s or "").strip()
+                return s.replace("`", "'")
+
+            first_name = _safe_code(r["first_name"] if r else "")
+            last_name  = _safe_code(r["last_name"] if r else "")
+            name = (first_name + " " + last_name).strip()
+           
+            email = _safe_code(r["email"] if r else "")
+            password = _safe_code(r["password"] if r else "")
+            recovery_email = _safe_code(r["recovery_email"])
     # =========================
     # FINAL MESSAGE
     # =========================
