@@ -28,8 +28,9 @@ for s in SESSION_STRINGS:
 
 client_index = 0
 
-# ========= GLOBAL STATE =========
+# ========= GLOBAL =========
 ACTIVE_FETCH = set()
+CLICKED = set()
 
 # ========= DB =========
 def db():
@@ -101,16 +102,17 @@ def parse_task(text):
 
     return first, last, email, password, recovery
 
-# ========= EVENT HANDLER =========
+# ========= AUTO HANDLER =========
 async def auto_handler(event):
     msg = event.message
     if not msg:
         return
 
+    msg_id = msg.id
     text = (msg.text or "").lower()
 
-    # 🔥 AUTO BUTTON CLICK
-    if msg.buttons:
+    # 🔥 AUTO BUTTON CLICK (New + Edited)
+    if msg.buttons and msg_id not in CLICKED:
         for row in msg.buttons:
             for btn in row:
                 t = (btn.text or "").lower()
@@ -118,12 +120,13 @@ async def auto_handler(event):
                 if any(k in t for k in ["done", "complete", "confirm"]):
                     try:
                         await msg.click(text=btn.text)
+                        CLICKED.add(msg_id)
                         print(f"[AUTO] ⚡ Clicked: {btn.text}")
                         return
                     except Exception as e:
                         print("[CLICK ERROR]", e)
 
-    # 🔥 FINAL RESULT DETECT
+    # 🔥 FINAL RESULT
     if "email" in text and "password" in text:
         if not ACTIVE_FETCH:
             return
@@ -168,7 +171,7 @@ async def auto_handler(event):
 
         print("[AUTO] 💾 Saved instantly")
 
-# ========= FETCH TASK =========
+# ========= FETCH =========
 async def fetch_task(user_id):
     idx, client = get_client()
     if client is None:
@@ -220,6 +223,7 @@ async def main():
         await c.connect()
         if await c.is_user_authorized():
             c.add_event_handler(auto_handler, events.NewMessage(from_users=SOURCE))
+            c.add_event_handler(auto_handler, events.MessageEdited(from_users=SOURCE))
             print(f"[USERBOT] ✅ Client {i} ready")
 
     print("[USERBOT] 🚀 Running...")
