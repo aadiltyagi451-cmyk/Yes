@@ -3398,7 +3398,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏳ Fetching task... Please wait")
 
     # =========================
-    # TASK FETCH (FROM TASKS TABLE)
+    # TASK FETCH (FROM REGISTRATIONS TABLE)
     # =========================
     def get_task(user_id):
         con = sqlite3.connect(DB)
@@ -3406,8 +3406,8 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cur = con.cursor()
 
         cur.execute("""
-        SELECT * FROM tasks
-        WHERE user_id=?
+        SELECT * FROM registrations
+        WHERE user_id=? AND state='fetched'
         ORDER BY id DESC
         LIMIT 1
         """, (user_id,))
@@ -3458,8 +3458,9 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cur.execute("""
     INSERT INTO registrations(
-        user_id, first_name, last_name, email, password, recovery_email, created_at, state
-    ) VALUES(?,?,?,?,?,?,?,?)
+        user_id, first_name, last_name, email, password,
+        recovery_email, task_id, msg_id, created_at, state
+    ) VALUES(?,?,?,?,?,?,?,?,?,?)
     """, (
         user.id,
         first_name,
@@ -3467,11 +3468,19 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         email,
         password,
         recovery_email,
+        task_id,
+        msg_id,
         now,
         "created",
     ))
 
     reg_id = cur.lastrowid
+
+    # 🔥 MARK TASK AS USED
+    cur.execute(
+        "UPDATE registrations SET state='done' WHERE id=?",
+        (task_data["id"],)
+    )
 
     expires_at = now + ACTION_TIMEOUT_HOURS * 3600
 
