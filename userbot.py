@@ -146,7 +146,7 @@ async def fetch_task(user_id):
     async with locks[idx]:
         print("[USERBOT] 🔄 Fetching task...")
 
-        await client.send_message(SOURCE, "➕ Register a new account")
+        await client.send_message(SOURCE, "➕ Register a new Gmail")
         await asyncio.sleep(1)
 
         msgs = await client.get_messages(SOURCE, limit=1)
