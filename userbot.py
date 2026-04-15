@@ -112,20 +112,35 @@ async def auto_handler(event):
         if msg_id != state["msg_id"]:
             continue
 
-        # 🔥 AUTO CLICK
-        if msg.buttons and msg_id not in CLICKED:
+        # 🔥 FIXED BUTTON FLOW
+        key = msg_id
+
+        if msg.buttons:
             for row in msg.buttons:
                 for btn in row:
                     t = (btn.text or "").lower()
 
-                    if any(k in t for k in ["done", "complete", "confirm"]):
-                        try:
+                    try:
+                        if "done" in t and f"{key}_done" not in CLICKED:
                             await msg.click(text=btn.text)
-                            CLICKED.add(msg_id)
-                            print(f"[AUTO] ⚡ {btn.text}")
+                            CLICKED.add(f"{key}_done")
+                            print("[AUTO] ⚡ Done")
                             return
-                        except Exception as e:
-                            print("[CLICK ERROR]", e)
+
+                        elif "complete" in t and f"{key}_complete" not in CLICKED:
+                            await msg.click(text=btn.text)
+                            CLICKED.add(f"{key}_complete")
+                            print("[AUTO] ⚡ Complete")
+                            return
+
+                        elif "confirm" in t and f"{key}_confirm" not in CLICKED:
+                            await msg.click(text=btn.text)
+                            CLICKED.add(f"{key}_confirm")
+                            print("[AUTO] ⚡ Confirm")
+                            return
+
+                    except Exception as e:
+                        print("[CLICK ERROR]", e)
 
         # 🔥 FINAL FETCH RESULT
         if "email" in text and "password" in text:
@@ -153,6 +168,7 @@ async def auto_handler(event):
             print("[FETCH] ✅ SAVED")
 
             del CLIENT_STATE[idx]
+            CLICKED.clear()
             return
 
 # ========= FETCH =========
@@ -229,6 +245,7 @@ async def confirm_task(user_id, msg_id):
         con.close()
 
         del CLIENT_STATE[idx]
+        CLICKED.clear()
 
 # ========= JOB LOOP =========
 async def job_loop():
