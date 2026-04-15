@@ -3,7 +3,7 @@ import time
 import asyncio
 import sqlite3
 import re
-from telethon import TelegramClient
+from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
 # ========= CONFIG =========
@@ -28,6 +28,9 @@ for s in SESSION_STRINGS:
 
 client_index = 0
 
+# ========= GLOBAL STATE =========
+ACTIVE_FETCH = set()
+
 # ========= DB =========
 def db():
     con = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
@@ -38,7 +41,6 @@ def init_db():
     con = db()
     cur = con.cursor()
 
-    # 🔥 MAIN TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS registrations(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +57,6 @@ def init_db():
     )
     """)
 
-    # JOB QUEUE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS jobs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,22 +70,6 @@ def init_db():
     )
     """)
 
-    # ✅ migration
-    cur.execute("PRAGMA table_info(jobs)")
-    cols = {row[1] for row in cur.fetchall()}
-
-    if "payload" not in cols:
-        cur.execute("ALTER TABLE jobs ADD COLUMN payload TEXT DEFAULT ''")
-
-    if "created_at" not in cols:
-        cur.execute("ALTER TABLE jobs ADD COLUMN created_at INTEGER")
-
-    if "updated_at" not in cols:
-        cur.execute("ALTER TABLE jobs ADD COLUMN updated_at INTEGER")
-
-    if "error" not in cols:
-        cur.execute("ALTER TABLE jobs ADD COLUMN error TEXT DEFAULT ''")
-
     con.commit()
     con.close()
 
@@ -96,27 +81,6 @@ def get_client():
     i = client_index % len(clients)
     client_index += 1
     return i, clients[i]
-
-async def click_button(msg, keywords):
-    if not getattr(msg, "buttons", None):
-        return False
-    for row in msg.buttons:
-        for btn in row:
-            if any(k in (btn.text or "").lower() for k in keywords):
-                await msg.click(text=btn.text)
-                return True
-    return False
-
-async def wait_for_button(client, msg_id, keywords, timeout=20):
-    for _ in range(int(timeout * 2)):
-        msg = await client.get_messages(SOURCE, ids=msg_id)
-        if getattr(msg, "buttons", None):
-            for row in msg.buttons:
-                for btn in row:
-                    if any(k in (btn.text or "").lower() for k in keywords):
-                        return msg
-        await asyncio.sleep(0.5)
-    return None
 
 # ========= PARSE =========
 def parse_task(text):
@@ -137,55 +101,49 @@ def parse_task(text):
 
     return first, last, email, password, recovery
 
-# ========= FETCH TASK =========
-async def fetch_task(user_id):
-    idx, client = get_client()
-    if client is None:
+# ========= EVENT HANDLER =========
+async def auto_handler(event):
+    msg = event.message
+    if not msg:
         return
 
-    async with locks[idx]:
-        print("[USERBOT] 🔄 Fetching task...")
+    text = (msg.text or "").lower()
 
-        await client.send_message(SOURCE, "➕ Register a new Gmail")
-        await asyncio.sleep(1)
+    # 🔥 AUTO BUTTON CLICK
+    if msg.buttons:
+        for row in msg.buttons:
+            for btn in row:
+                t = (btn.text or "").lower()
 
-        msgs = await client.get_messages(SOURCE, limit=1)
-        if not msgs:
+                if any(k in t for k in ["done", "complete", "confirm"]):
+                    try:
+                        await msg.click(text=btn.text)
+                        print(f"[AUTO] ⚡ Clicked: {btn.text}")
+                        return
+                    except Exception as e:
+                        print("[CLICK ERROR]", e)
+
+    # 🔥 FINAL RESULT DETECT
+    if "email" in text and "password" in text:
+        if not ACTIVE_FETCH:
             return
 
-        msg = msgs[0]
-        msg_id = msg.id
+        user_id = list(ACTIVE_FETCH)[0]
+        ACTIVE_FETCH.remove(user_id)
 
-        msg = await wait_for_button(client, msg_id, ["done"])
-        if not msg: return
-        await click_button(msg, ["done"])
+        print("[AUTO] ✅ FINAL RECEIVED")
 
-        msg = await wait_for_button(client, msg_id, ["complete"])
-        if not msg: return
-        await click_button(msg, ["complete"])
-
-        msg = await wait_for_button(client, msg_id, ["confirm"])
-        if not msg: return
-        await click_button(msg, ["confirm"])
-
-        await asyncio.sleep(1)
-
-        final = await client.get_messages(SOURCE, ids=msg_id)
-        text = final.text or ""
-
-        first, last, email, password, recovery = parse_task(text)
-        task_id = f"{user_id}_{msg_id}"
+        first, last, email, password, recovery = parse_task(msg.text or "")
+        task_id = f"{user_id}_{msg.id}"
 
         con = db()
         cur = con.cursor()
 
-        # 🔥 CLEAN OLD FETCHED TASKS
         cur.execute(
             "UPDATE registrations SET state='done' WHERE user_id=? AND state='fetched'",
             (user_id,)
         )
 
-        # 🔥 INSERT NEW TASK
         cur.execute("""
         INSERT INTO registrations(
             user_id, first_name, last_name, email, password,
@@ -200,7 +158,7 @@ async def fetch_task(user_id):
             password,
             recovery,
             task_id,
-            int(msg_id),
+            int(msg.id),
             int(time.time()),
             "fetched"
         ))
@@ -208,7 +166,20 @@ async def fetch_task(user_id):
         con.commit()
         con.close()
 
-        print("[USERBOT] ✅ Saved to registrations")
+        print("[AUTO] 💾 Saved instantly")
+
+# ========= FETCH TASK =========
+async def fetch_task(user_id):
+    idx, client = get_client()
+    if client is None:
+        return
+
+    async with locks[idx]:
+        print("[USERBOT] 🔄 Fetching task...")
+
+        ACTIVE_FETCH.add(user_id)
+
+        await client.send_message(SOURCE, "➕ Register a new Gmail")
 
 # ========= JOB LOOP =========
 async def job_loop():
@@ -248,6 +219,7 @@ async def main():
     for i, c in enumerate(clients):
         await c.connect()
         if await c.is_user_authorized():
+            c.add_event_handler(auto_handler, events.NewMessage(from_users=SOURCE))
             print(f"[USERBOT] ✅ Client {i} ready")
 
     print("[USERBOT] 🚀 Running...")
