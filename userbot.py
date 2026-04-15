@@ -59,11 +59,31 @@ def init_db():
     cur.execute("""
     CREATE TABLE IF NOT EXISTS jobs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        job_type TEXT,
-        status TEXT DEFAULT 'pending'
+        user_id INTEGER NOT NULL,
+        job_type TEXT NOT NULL,
+        payload TEXT DEFAULT '',
+        status TEXT DEFAULT 'pending',
+        created_at INTEGER,
+        updated_at INTEGER,
+        error TEXT DEFAULT ''
     )
     """)
+
+    # ✅ migration (INSIDE function)
+    cur.execute("PRAGMA table_info(jobs)")
+    cols = {row[1] for row in cur.fetchall()}
+
+    if "payload" not in cols:
+        cur.execute("ALTER TABLE jobs ADD COLUMN payload TEXT DEFAULT ''")
+
+    if "created_at" not in cols:
+        cur.execute("ALTER TABLE jobs ADD COLUMN created_at INTEGER")
+
+    if "updated_at" not in cols:
+        cur.execute("ALTER TABLE jobs ADD COLUMN updated_at INTEGER")
+
+    if "error" not in cols:
+        cur.execute("ALTER TABLE jobs ADD COLUMN error TEXT DEFAULT ''")
 
     con.commit()
     con.close()
