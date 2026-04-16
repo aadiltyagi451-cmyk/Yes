@@ -105,23 +105,16 @@ async def auto_handler(event):
     if not msg:
         return
 
-    msg_id = msg.id
     text = (msg.text or "").lower()
 
+    # 🔥 ACTIVE CLIENT FIND
     for idx, state in list(CLIENT_STATE.items()):
 
-        # 🔥 RELAXED MATCH (IMPORTANT)
-        if abs(msg_id - state["msg_id"]) > 5:
-            continue
+        # ❌ msg_id match हटाया (यही main fix है)
 
-        # 🔥 RESET CLICKED FOR NEW MSG
-        if msg_id != state["msg_id"]:
-            CLICKED.clear()
-            CLIENT_STATE[idx]["msg_id"] = msg_id
+        key = state["msg_id"]
 
-        key = msg_id
-
-        # ========= AUTO CLICK =========
+        # 🔥 BUTTON AUTO CLICK (FAST CHAIN)
         if msg.buttons:
             for row in msg.buttons:
                 for btn in row:
@@ -134,13 +127,13 @@ async def auto_handler(event):
                             print("[AUTO] ⚡ Done")
                             return
 
-                        elif "complete" in t and f"{key}_complete" not in CLICKED:
+                        if "complete" in t and f"{key}_complete" not in CLICKED:
                             await msg.click(text=btn.text)
                             CLICKED.add(f"{key}_complete")
                             print("[AUTO] ⚡ Complete")
                             return
 
-                        elif "confirm" in t and f"{key}_confirm" not in CLICKED:
+                        if "confirm" in t and f"{key}_confirm" not in CLICKED:
                             await msg.click(text=btn.text)
                             CLICKED.add(f"{key}_confirm")
                             print("[AUTO] ⚡ Confirm")
