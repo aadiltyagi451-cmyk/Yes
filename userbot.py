@@ -22,15 +22,14 @@ clients = []
 locks = []
 
 for s in SESSION_STRINGS:
-    if s:
-        clients.append(TelegramClient(StringSession(s), api_id, api_hash))
-        locks.append(asyncio.Lock())
+    clients.append(TelegramClient(StringSession(s), api_id, api_hash))
+    locks.append(asyncio.Lock())
 
 client_index = 0
 
 # ========= GLOBAL =========
-CLIENT_STATE = {}
-CLICKED = set()
+CLIENT_STATE = {}   # idx -> {user_id, msg_id}
+FLOW_STATE = {}     # idx -> step (0-3)
 
 # ========= DB =========
 def db():
@@ -77,8 +76,6 @@ def init_db():
 # ========= HELPERS =========
 def get_client():
     global client_index
-    if not clients:
-        return None, None
     i = client_index % len(clients)
     client_index += 1
     return i, clients[i]
@@ -105,44 +102,46 @@ async def auto_handler(event):
     if not msg:
         return
 
+    msg_id = msg.id
     text = (msg.text or "").lower()
 
-    # 🔥 ACTIVE CLIENT FIND
     for idx, state in list(CLIENT_STATE.items()):
+        if msg_id != state["msg_id"]:
+            continue
 
-        # ❌ msg_id match हटाया (यही main fix है)
+        step = FLOW_STATE.get(idx, 0)
 
-        key = state["msg_id"]
-
-        # 🔥 BUTTON AUTO CLICK (FAST CHAIN)
         if msg.buttons:
             for row in msg.buttons:
                 for btn in row:
                     t = (btn.text or "").lower()
 
                     try:
-                        if "done" in t and f"{key}_done" not in CLICKED:
+                        # STEP 1 → DONE
+                        if step == 0 and "done" in t:
                             await msg.click(text=btn.text)
-                            CLICKED.add(f"{key}_done")
-                            print("[AUTO] ⚡ Done")
+                            FLOW_STATE[idx] = 1
+                            print("[FLOW] Done")
                             return
 
-                        if "complete" in t and f"{key}_complete" not in CLICKED:
+                        # STEP 2 → CONFIRM
+                        elif step == 1 and "confirm" in t:
                             await msg.click(text=btn.text)
-                            CLICKED.add(f"{key}_complete")
-                            print("[AUTO] ⚡ Complete")
+                            FLOW_STATE[idx] = 2
+                            print("[FLOW] Confirm")
                             return
 
-                        if "confirm" in t and f"{key}_confirm" not in CLICKED:
+                        # STEP 3 → COMPLETE
+                        elif step == 2 and "complete" in t:
                             await msg.click(text=btn.text)
-                            CLICKED.add(f"{key}_confirm")
-                            print("[AUTO] ⚡ Confirm")
+                            FLOW_STATE[idx] = 3
+                            print("[FLOW] Complete")
                             return
 
                     except Exception as e:
                         print("[CLICK ERROR]", e)
 
-        # ========= FINAL FETCH =========
+        # FINAL RESULT (FETCH)
         if "email" in text and "password" in text:
             user_id = state["user_id"]
 
@@ -168,74 +167,55 @@ async def auto_handler(event):
             print("[FETCH] ✅ SAVED")
 
             CLIENT_STATE.pop(idx, None)
-            CLICKED.clear()
+            FLOW_STATE.pop(idx, None)
             return
 
 # ========= FETCH =========
 async def fetch_task(user_id):
     idx, client = get_client()
-    if client is None:
-        return
 
     async with locks[idx]:
         print("[FETCH] 🔄", user_id)
 
-        # 🔥 RESET STATE
-        CLIENT_STATE.pop(idx, None)
-        CLICKED.clear()
-
         await client.send_message(SOURCE, "➕ Register a new Gmail")
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
 
-        msgs = await client.get_messages(SOURCE, limit=3)
-
-        msg = None
-        for m in msgs:
-            if m.text:
-                msg = m
-                break
-
-        if not msg:
-            return
+        msg = (await client.get_messages(SOURCE, limit=1))[0]
 
         CLIENT_STATE[idx] = {
             "user_id": user_id,
             "msg_id": msg.id
         }
 
-        print("[TRACK]", idx, msg.id)
+        FLOW_STATE[idx] = 0
 
 # ========= CONFIRM =========
 async def confirm_task(user_id, msg_id):
     idx, client = get_client()
-    if client is None:
-        return
 
     async with locks[idx]:
         print("[CONFIRM] 🔄", user_id)
-
-        # 🔥 RESET STATE
-        CLIENT_STATE.pop(idx, None)
-        CLICKED.clear()
 
         CLIENT_STATE[idx] = {
             "user_id": user_id,
             "msg_id": int(msg_id)
         }
 
+        FLOW_STATE[idx] = 3  # already reached complete
+
         msg = await client.get_messages(SOURCE, ids=int(msg_id))
         if not msg:
             return
 
-        # 🔥 CLICK DONE
+        # 🔥 FINAL DONE CLICK (ONLY HERE)
         if msg.buttons:
             for row in msg.buttons:
                 for btn in row:
                     if "done" in (btn.text or "").lower():
                         await msg.click(text=btn.text)
-                        print("[CONFIRM] ⚡ Done clicked")
+                        print("[CONFIRM] ⚡ Final Done clicked")
+                        break
 
-        # 🔥 WAIT RESULT
         success = False
 
         for _ in range(30):
@@ -262,7 +242,7 @@ async def confirm_task(user_id, msg_id):
         con.close()
 
         CLIENT_STATE.pop(idx, None)
-        CLICKED.clear()
+        FLOW_STATE.pop(idx, None)
 
 # ========= JOB LOOP =========
 async def job_loop():
