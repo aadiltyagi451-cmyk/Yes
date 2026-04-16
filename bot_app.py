@@ -4090,8 +4090,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
             return
-
-
+# ================= CANCEL =================
         if data.startswith("REG_CANCEL:"):
             # show cancel confirmation buttons (do not cancel immediately)
             set_action_state(action_id, "canceled_prompt")
@@ -4101,24 +4100,26 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             return
 
+
+        # ================= DONE =================
         if data.startswith("REG_DONE:"):
             # After DONE: edit SAME message text (rebuild Markdown to preserve monospace)
             set_action_state(action_id, "done1")
 
-            # Start cooldown timer from DONE click (so if user waits 50s before first confirm, it runs immediately)
+            # Start cooldown timer
             ts_key = f"confirm_ts_{action_id}"
             ready_key = f"confirm_ready_{action_id}"
             context.user_data[ts_key] = int(time.time())
             context.user_data[ready_key] = False
 
-            # Load registration from DB (so we can rebuild the original formatted text)
+            # Load registration
             con = db()
             cur = con.cursor()
             cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
             r = cur.fetchone()
             con.close()
 
-            # Safety: avoid breaking Markdown if data contains backticks
+            # Safety
             def _safe_code(s: str) -> str:
                 s = (s or "").strip()
                 return s.replace("`", "'")
@@ -4126,10 +4127,11 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             first_name = _safe_code(r["first_name"] if r else "")
             last_name  = _safe_code(r["last_name"] if r else "")
             name = (first_name + " " + last_name).strip()
-           
+
             email = _safe_code(r["email"] if r else "")
             password = _safe_code(r["password"] if r else "")
             recovery_email = _safe_code(r["recovery_email"])
+
             base_text = (
                 "Register account using the specified\n"
                 "data and get from ₹20 to ₹22\n\n"
@@ -4145,9 +4147,9 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             base_text += (
-            "\n________________________\n"
-            "🚦 You need to add Recovery email\n"
-            f"`{recovery_email}`\n"
+                "\n________________________\n"
+                "🚦 You need to add Recovery email\n"
+                f"`{recovery_email}`\n"
             )
 
             try:
@@ -4157,7 +4159,6 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=confirm_again_button(action_id),
                 )
             except Exception:
-                # fallback: at least update buttons
                 try:
                     await q.edit_message_reply_markup(
                         reply_markup=confirm_again_button(action_id)
@@ -4166,153 +4167,147 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
 
             return
-            
-      
-    # =========================================================
-    # 🔥 BELOW SAME (UNCHANGED LOGIC)
-    # =========================================================
+
+
+        # ================= CONFIRM =================
         if data.startswith("REG_CONFIRM:"):
 
-    # Load registration
-    con = db()
-    cur = con.cursor()
-    cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
-    r = cur.fetchone()
-    con.close()
+            # Load registration
+            con = db()
+            cur = con.cursor()
+            cur.execute("SELECT * FROM registrations WHERE id=?", (a["reg_id"],))
+            r = cur.fetchone()
+            con.close()
 
-    email = (r["email"] or "").strip()
+            email = (r["email"] or "").strip()
 
-    # 🔥 FIX 1: SOURCE MSG ID
-    source_msg_id = int(r["msg_id"] or 0)
+            # 🔥 SOURCE MSG ID
+            source_msg_id = int(r["msg_id"] or 0)
 
-    target_msg_id = q.message.message_id
-    chat_id = q.message.chat_id
+            target_msg_id = q.message.message_id
+            chat_id = q.message.chat_id
 
-    # Send checking message
-    confirm_msg_id = None
-    try:
-        sent = await context.bot.send_message(
-            chat_id=chat_id,
-            text="⏳ Checking...",
-            reply_to_message_id=target_msg_id,
-        )
-        confirm_msg_id = sent.message_id
-    except:
-        pass
-
-    try:
-        await q.answer()
-    except:
-        pass
-
-    # 🔥 COOLDOWN
-    now = int(time.time())
-    ts_key = f"confirm_ts_{action_id}"
-    ready_key = f"confirm_ready_{action_id}"
-
-    first_ts = context.user_data.get(ts_key)
-    is_ready = bool(context.user_data.get(ready_key, False))
-
-    if not first_ts:
-        context.user_data[ts_key] = now
-        first_ts = now
-
-    if not is_ready:
-        elapsed = now - int(first_ts)
-
-        if elapsed < CONFIRM_COOLDOWN_SEC:
+            # Send checking message
+            confirm_msg_id = None
             try:
-                await _edit_message_safe(
-                    context.bot,
-                    chat_id,
-                    confirm_msg_id,
-                    "⏳ Wait..."
+                sent = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Checking...",
+                    reply_to_message_id=target_msg_id,
                 )
+                confirm_msg_id = sent.message_id
             except:
                 pass
+
+            try:
+                await q.answer()
+            except:
+                pass
+
+            # 🔥 COOLDOWN
+            now = int(time.time())
+            ts_key = f"confirm_ts_{action_id}"
+            ready_key = f"confirm_ready_{action_id}"
+
+            first_ts = context.user_data.get(ts_key)
+            is_ready = bool(context.user_data.get(ready_key, False))
+
+            if not first_ts:
+                context.user_data[ts_key] = now
+                first_ts = now
+
+            if not is_ready:
+                elapsed = now - int(first_ts)
+
+                if elapsed < CONFIRM_COOLDOWN_SEC:
+                    try:
+                        await _edit_message_safe(
+                            context.bot,
+                            chat_id,
+                            confirm_msg_id,
+                            "⏳ Wait..."
+                        )
+                    except:
+                        pass
+                    return
+                else:
+                    context.user_data[ready_key] = True
+
+            # 🔥 USERBOT CALL
+            await _request_userbot_job(
+                "confirm",
+                user.id,
+                payload=str(source_msg_id)
+            )
+
+            # 🔥 RESULT DB READ
+            def get_reg_status(reg_id):
+                con = sqlite3.connect(DB_PATH)
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute("""
+                SELECT status, state, email
+                FROM registrations
+                WHERE id=?
+                """, (int(reg_id),))
+                row = cur.fetchone()
+                con.close()
+                return dict(row) if row else None
+
+            result = None
+            for _ in range(30):
+                result = get_reg_status(a["reg_id"])
+                if result and result.get("state") in ("done", "failed"):
+                    break
+                await asyncio.sleep(1)
+
+            if not result:
+                try:
+                    await _edit_message_safe(
+                        context.bot,
+                        chat_id,
+                        confirm_msg_id,
+                        "❌ Timeout, try again"
+                    )
+                except:
+                    pass
+                return
+
+            ok = True if result.get("state") == "done" else False
+
+            # ❌ FAIL
+            if not ok:
+                set_action_state(action_id, "done1")
+                set_reg_state(a["reg_id"], "created")
+
+                try:
+                    await _edit_message_safe(
+                        context.bot,
+                        chat_id,
+                        confirm_msg_id,
+                        f"❌ Failed: {email}"
+                    )
+                except:
+                    pass
+
+                try:
+                    await q.edit_message_reply_markup(
+                        reply_markup=confirm_again_button(action_id)
+                    )
+                except:
+                    pass
+
+                return
+
+            # ✅ SUCCESS
+            set_action_state(action_id, "waiting_admin")
+            set_reg_state(a["reg_id"], "confirmed_by_user")
+
+            # 🔥 बाकी code SAME रहेगा (precredit, save_form_row, etc.)
             return
-        else:
-            context.user_data[ready_key] = True
-
-    # =========================================================
-    # 🔥 USERBOT CONFIRM CALL (FIXED)
-    # =========================================================
-
-    await _request_userbot_job(
-        "confirm",
-        user.id,
-        payload=str(source_msg_id)  # ✅ IMPORTANT
-    )
-
-    # =========================================================
-    # 🔥 RESULT DB READ
-    # =========================================================
-
-    def get_reg_status(reg_id):
-        con = sqlite3.connect(DB)
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
-        cur.execute("""
-        SELECT status, state, email
-        FROM registrations
-        WHERE id=?
-        """, (int(reg_id),))
-        row = cur.fetchone()
-        con.close()
-        return dict(row) if row else None
-
-    result = None
-    for _ in range(30):
-        result = get_reg_status(a["reg_id"])
-        if result and result.get("state") in ("done", "failed"):
-            break
-        await asyncio.sleep(1)
-
-    if not result:
-        try:
-            await _edit_message_safe(
-                context.bot,
-                chat_id,
-                confirm_msg_id,
-                "❌ Timeout, try again"
-            )
-        except:
-            pass
-        return
-
-    ok = True if result.get("state") == "done" else False
-
-    # =========================================================
-    # 🔥 ORIGINAL FLOW (UNCHANGED)
-    # =========================================================
-
-    if not ok:
-        set_action_state(action_id, "done1")
-        set_reg_state(a["reg_id"], "created")
-
-        try:
-            await _edit_message_safe(
-                context.bot,
-                chat_id,
-                confirm_msg_id,
-                f"❌ Failed: {email}"
-            )
-        except:
-            pass
-
-        try:
-            await q.edit_message_reply_markup(
-                reply_markup=confirm_again_button(action_id)
-            )
-        except:
-            pass
-
-        return
-
-    # ✅ SUCCESS FLOW
-    set_action_state(action_id, "waiting_admin")
-    set_reg_state(a["reg_id"], "confirmed_by_user")
-
+        
+            
+    
     # 🔥 PRE-CREDIT (UNCHANGED)
     try:
         con_pc = db()
@@ -4415,7 +4410,10 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     await send_logout_video(context, user.id)
-    return
+    return     
+    
+
+    
 
          
 
