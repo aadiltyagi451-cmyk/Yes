@@ -105,16 +105,16 @@ async def auto_handler(event):
     if not msg:
         return
 
-    msg_id = msg.id
     text = (msg.text or "").lower()
 
+    # 🔥 ACTIVE CLIENT FIND
     for idx, state in list(CLIENT_STATE.items()):
-        if msg_id != state["msg_id"]:
-            continue
 
-        # 🔥 FIXED BUTTON FLOW
-        key = msg_id
+        # ❌ msg_id match हटाया (यही main fix है)
 
+        key = state["msg_id"]
+
+        # 🔥 BUTTON AUTO CLICK (FAST CHAIN)
         if msg.buttons:
             for row in msg.buttons:
                 for btn in row:
@@ -127,13 +127,13 @@ async def auto_handler(event):
                             print("[AUTO] ⚡ Done")
                             return
 
-                        elif "complete" in t and f"{key}_complete" not in CLICKED:
+                        if "complete" in t and f"{key}_complete" not in CLICKED:
                             await msg.click(text=btn.text)
                             CLICKED.add(f"{key}_complete")
                             print("[AUTO] ⚡ Complete")
                             return
 
-                        elif "confirm" in t and f"{key}_confirm" not in CLICKED:
+                        if "confirm" in t and f"{key}_confirm" not in CLICKED:
                             await msg.click(text=btn.text)
                             CLICKED.add(f"{key}_confirm")
                             print("[AUTO] ⚡ Confirm")
@@ -142,7 +142,7 @@ async def auto_handler(event):
                     except Exception as e:
                         print("[CLICK ERROR]", e)
 
-        # 🔥 FINAL FETCH RESULT
+        # 🔥 FINAL RESULT DETECT
         if "email" in text and "password" in text:
             user_id = state["user_id"]
 
@@ -159,7 +159,7 @@ async def auto_handler(event):
             VALUES(?,?,?,?,?,?,?,?,?,?)
             """, (
                 user_id, first, last, email, password,
-                recovery, f"{user_id}_{msg_id}", msg_id, int(time.time()), "fetched"
+                recovery, f"{user_id}_{msg.id}", msg.id, int(time.time()), "fetched"
             ))
 
             con.commit()
